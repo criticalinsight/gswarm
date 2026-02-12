@@ -1,18 +1,64 @@
-import gswarm/node.{type NodeContext, Leader, Follower}
+import gleam/io
+import gleam/erlang/process
+import gswarm/node.{type NodeContext}
+import gleamdb
 
 pub fn join_fabric(role: node.NodeRole, cluster_id: String) -> Result(NodeContext, String) {
-  // In a real-world scenario, this would use DNS or a seed list.
-  // For the reference implementation, we rely on the Erlang global registry
-  // which is abstracted away by GleamDB's distributed start.
+  let res = node.start(role, cluster_id)
   
-  node.start(role, cluster_id)
+  case res {
+    Ok(ctx) -> {
+      case role {
+        node.Follower -> {
+          // Spawn Raft Role Watcher
+          process.spawn_unlinked(fn() {
+            // Assume we start as Follower (False)
+            role_watcher_loop(ctx, False)
+          })
+          Ok(ctx)
+        }
+        node.Leader | node.LeaderEphemeral -> Ok(ctx)
+      }
+    }
+    Error(e) -> Error(e)
+  }
+}
+
+import gswarm/ticker
+import gswarm/reflex
+
+fn role_watcher_loop(ctx: NodeContext, was_leader: Bool) {
+  process.sleep(1000)
+  
+  // Ask GleamDB about its Raft state
+  let is_leader = gleamdb.is_leader(ctx.db)
+  
+  case was_leader, is_leader {
+    False, True -> {
+      io.println("👑 Fabric: I am now the LEADER (via Raft). Starting sovereign reflexes...")
+      
+      // Autohealing: Resume simulation for the primary markets
+      ticker.start_ticker(ctx.db, "m_1")
+      ticker.start_ticker(ctx.db, "m_2")
+      reflex.spawn_market_watcher(ctx.db, "m_1")
+      reflex.spawn_market_watcher(ctx.db, "m_2")
+      
+      role_watcher_loop(ctx, True)
+    }
+    True, False -> {
+      io.println("📉 Fabric: I am no longer the LEADER. Stepping down...")
+      // In a full implementation, we would stop tickers here.
+      role_watcher_loop(ctx, False)
+    }
+    _, _ -> role_watcher_loop(ctx, is_leader)
+  }
 }
 
 pub fn broadcast_ping(ctx: NodeContext) -> Nil {
   // A simple liveness check across the mesh
   case ctx.role {
-    Leader -> Nil // Leader doesn't ping, it rules.
-    Follower -> {
+    node.Leader | node.LeaderEphemeral -> Nil // Leader doesn't ping, it rules.
+    node.Follower -> {
       // Future: Implement keepalive to leader
       Nil
     }

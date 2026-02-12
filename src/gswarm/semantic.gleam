@@ -1,4 +1,13 @@
 import gleam/list
+import gleam/string
+
+
+fn range(start: Int, end: Int) -> List(Int) {
+  case start > end {
+    True -> []
+    False -> [start, ..range(start + 1, end)]
+  }
+}
 
 pub fn generate_embedding(text: String) -> List(Float) {
   // In a real system, this would call an LLM (OAI, Gemini, etc.)
@@ -6,7 +15,7 @@ pub fn generate_embedding(text: String) -> List(Float) {
   let hash = text_to_hash(text, 0)
   
   // Create a 16-dimensional vector
-  list.range(1, 16)
+  range(1, 16)
   |> list.map(fn(i) {
     let val = int_to_float(hash + i)
     // Normalize to some range
@@ -20,7 +29,8 @@ fn text_to_hash(text: String, acc: Int) -> Int {
     "" -> acc
     _ -> {
       // Just a simple folding
-      text_to_hash("", acc + 1) // logic for demonstration
+      // We need to consume text. For mock, just return random-ish based on length
+      acc + string.length(text)
     }
   }
 }

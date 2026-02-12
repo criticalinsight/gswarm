@@ -8,7 +8,6 @@ import gswarm/ticker
 import gswarm/reflex
 import gswarm/observer
 import gswarm/analytics
-import gswarm/semantic
 import gswarm/context
 
 pub fn main() {
@@ -40,7 +39,8 @@ pub fn main() {
           
           ticker.start_ticker(ctx.db, "m_1")
           ticker.start_ticker(ctx.db, "m_2")
-          reflex.spawn_price_watcher(ctx.db)
+          reflex.spawn_market_watcher(ctx.db, "m_1")
+          reflex.spawn_market_watcher(ctx.db, "m_2")
           reflex.spawn_multi_market_watcher(ctx.db, "m_1", "m_2")
           
           process.spawn_unlinked(fn() {

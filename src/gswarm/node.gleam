@@ -1,12 +1,14 @@
 import gleam/otp/actor
 import gleam/option.{Some}
 import gleam/string
+import gleam/erlang/process
 import gleamdb
-import gleamdb/storage
+import gleamdb/storage/mnesia
 
 pub type NodeRole {
   Leader
   Follower
+  LeaderEphemeral
 }
 
 pub type NodeContext {
@@ -20,10 +22,17 @@ pub type NodeContext {
 pub fn start(role: NodeRole, cluster_id: String) -> Result(NodeContext, String) {
   case role {
     Leader -> {
-      // Debugging: Fallback to start_named to isolate timeout issue
-      case gleamdb.start_named(cluster_id, Some(storage.ephemeral())) {
+      // Use Mnesia for Durable Sovereignty
+      case gleamdb.start_distributed(cluster_id, Some(mnesia.adapter())) {
         Ok(db) -> Ok(NodeContext(Leader, db, cluster_id))
         Error(e) -> Error("Failed to start leader: " <> string_error(e))
+      }
+    }
+    LeaderEphemeral -> {
+      // Ephemeral for benchmarking engine raw capacity
+      case gleamdb.start_distributed(cluster_id, option.None) {
+        Ok(db) -> Ok(NodeContext(Leader, db, cluster_id))
+        Error(e) -> Error("Failed to start ephemeral leader: " <> string_error(e))
       }
     }
     Follower -> {
@@ -34,6 +43,26 @@ pub fn start(role: NodeRole, cluster_id: String) -> Result(NodeContext, String) 
       }
     }
   }
+}
+
+pub fn promote_to_leader(ctx: NodeContext) -> Result(NodeContext, String) {
+  case ctx.role {
+    Leader | LeaderEphemeral -> Ok(ctx)
+    Follower -> {
+      // Autonomous Promotion: Restart node as Leader
+      start(Leader, ctx.id)
+    }
+  }
+}
+
+import gleamdb/global
+
+pub fn stop(ctx: NodeContext) {
+  let assert Ok(pid) = process.subject_owner(ctx.db)
+  process.kill(pid)
+  // Clean up global registry
+  global.unregister("gleamdb_leader")
+  global.unregister("gleamdb_" <> ctx.id)
 }
 
 fn string_error(err: actor.StartError) -> String {

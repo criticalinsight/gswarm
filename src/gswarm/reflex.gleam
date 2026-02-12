@@ -42,6 +42,41 @@ fn watcher_loop(subject: Subject(ReactiveDelta)) {
   watcher_loop(subject)
 }
 
+pub fn spawn_market_watcher(db: gleamdb.Db, market_id: String) {
+  process.spawn_unlinked(fn() {
+    let subject = process.new_subject()
+    
+    // Subscribe only to price updates for a specific market entity
+    let query = [
+      gleamdb.p(#(Var("m"), "market/id", Val(fact.Str(market_id)))),
+      gleamdb.p(#(Var("m"), "tick/price/Yes", Var("price")))
+    ]
+    
+    gleamdb.subscribe(db, query, subject)
+    
+    io.println("🔔 Reflex [" <> market_id <> "]: Watcher spawned.")
+    market_watcher_loop(market_id, subject)
+  })
+}
+
+fn market_watcher_loop(market_id: String, subject: Subject(ReactiveDelta)) {
+  let assert Ok(delta) = process.receive(subject, 100000)
+  
+  case delta {
+    Initial(_) -> Nil
+    Delta(added, _removed) -> {
+      case list.is_empty(added) {
+        True -> Nil
+        False -> {
+           io.println("🔔 Reflex [" <> market_id <> "]: 🚨 New Price Detected! Batch size: " <> int.to_string(list.length(added)))
+        }
+      }
+    }
+  }
+  
+  market_watcher_loop(market_id, subject)
+}
+
 pub fn spawn_multi_market_watcher(db: gleamdb.Db, market_a: String, market_b: String) {
   process.spawn_unlinked(fn() {
     let subject = process.new_subject()

@@ -1,3 +1,4 @@
+import gleam/list
 import gleamdb
 import gleamdb/fact
 
@@ -19,17 +20,37 @@ pub type Tick {
   )
 }
 
+import gleam/float
+import gleam/int
+import gleam/result
 import gleamdb/shared/types.{type DbState}
 
+pub fn validate_tick(tick: Tick) -> Result(Nil, String) {
+  case tick.price <. 0.0 {
+    True -> Error("Negative price detected: " <> float.to_string(tick.price))
+    False -> {
+      case tick.volume < 0 {
+        True -> Error("Negative volume detected: " <> int.to_string(tick.volume))
+        False -> Ok(Nil)
+      }
+    }
+  }
+}
+
 pub fn ingest_tick(db: gleamdb.Db, tick: Tick) -> Result(DbState, String) {
-  // In a real high-frequency system, we might batch these.
-  // For Gswarm, we transact directly to demonstrate Silicon Saturation speed.
+  ingest_batch(db, [tick])
+}
+
+pub fn ingest_batch(db: gleamdb.Db, ticks: List(Tick)) -> Result(DbState, String) {
+  use _ <- result.try(list.try_each(ticks, validate_tick))
   
-  let facts = [
-    #(fact.Lookup(#("market/id", fact.Str(tick.market_id))), "tick/price/" <> tick.outcome, fact.Float(tick.price)),
-    #(fact.Lookup(#("market/id", fact.Str(tick.market_id))), "tick/volume/" <> tick.outcome, fact.Int(tick.volume)),
-    #(fact.Lookup(#("market/id", fact.Str(tick.market_id))), "tick/timestamp", fact.Int(tick.timestamp))
-  ]
+  let facts = list.flat_map(ticks, fn(tick) {
+    [
+      #(fact.Lookup(#("market/id", fact.Str(tick.market_id))), "tick/price/" <> tick.outcome, fact.Float(tick.price)),
+      #(fact.Lookup(#("market/id", fact.Str(tick.market_id))), "tick/volume/" <> tick.outcome, fact.Int(tick.volume)),
+      #(fact.Lookup(#("market/id", fact.Str(tick.market_id))), "tick/timestamp", fact.Int(tick.timestamp))
+    ]
+  })
   
   gleamdb.transact(db, facts)
 }
