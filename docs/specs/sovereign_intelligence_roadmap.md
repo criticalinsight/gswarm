@@ -18,7 +18,8 @@ This roadmap deepens the intelligence stack in five phases, each de-complecting 
 | 30 | **Real Vector Read Path** | Can the Analyst see the actual market state? |
 | 31 | **Volume & Order Flow Intelligence** | What does real volume tell us that price alone cannot? |
 | 32 | **Portfolio Risk Engine** | How much should we risk per signal? |
-| 33 | **Temporal Pattern Memory** | Can the system recognize what *time of day* patterns repeat? |
+| 33 | **Temporal Pattern Memory** | 🔮 PLANNED | Can the system recognize what *time of day* patterns repeat? |
+| 39-44| **Sovereign Fabric** | ✅ DONE | Sharding, Bloom Filters, & Probabilistic Memory |
 
 ```mermaid
 graph TD
@@ -29,6 +30,8 @@ graph TD
     E --> D
     B --> F["Phase 33: Temporal Memory"]
     D --> G["🎯 Autonomous Alpha"]
+    H["Phase 39-44: Fabric ✅"] --> B
+    H --> C
 ```
 
 ---

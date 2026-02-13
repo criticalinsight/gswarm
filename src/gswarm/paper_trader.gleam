@@ -6,6 +6,8 @@ import gleam/otp/actor
 import gleamdb
 import gswarm/strategy.{type Strategy, Buy, Sell}
 import gswarm/risk
+import gswarm/result_fact
+import gswarm/strategy_selector
 
 pub type State {
   State(
@@ -17,13 +19,14 @@ pub type State {
     trades: Int,
     halted: Bool,
     active_strategy: Strategy,
+    active_strategy_id: String,
     risk_config: risk.RiskConfig
   )
 }
 
 pub type Message {
   TickEvent(price: Float, vector: List(Float))
-  SetStrategy(strategy: Strategy)
+  SetStrategy(strategy: Strategy, id: String)
   GetStatus(reply_to: Subject(State))
   Shutdown
 }
@@ -38,6 +41,7 @@ pub fn start_paper_trader(db: gleamdb.Db, market_id: String, initial_balance: Fl
     trades: 0,
     halted: False,
     active_strategy: strategy.mean_reversion,
+    active_strategy_id: "mean_reversion",
     risk_config: risk.default_config()
   )
 
@@ -70,11 +74,18 @@ fn loop(state: State, msg: Message) -> actor.Next(State, Message) {
            actor.continue(State(..state, halted: True, peak_balance: new_peak))
         }
         False -> {
-          // Execute the ACTIVE strategy (hot-swappable)
+          // Execute the ACTIVE strategy
           let action = state.active_strategy(vector)
+          
+          let strat_name = state.active_strategy_id
 
           let new_state = case action, state.position == 0.0 {
             Buy, True -> {
+              // Record Prediction
+              // (Prediction is implicit in the Buy action here, but ideally we'd record explicit signal)
+              // For Phase 29, let's assume Buy = "up" prediction
+              result_fact.record_prediction(state.db, state.market_id, "up", price, strat_name)
+
               // Risk-gated position sizing
               let pos = risk.size_position(state.balance, price, state.risk_config)
               let cost = pos *. price
@@ -90,6 +101,9 @@ fn loop(state: State, msg: Message) -> actor.Next(State, Message) {
               )
             }
             Sell, False -> {
+               // Record Prediction (Sell = "down")
+               result_fact.record_prediction(state.db, state.market_id, "down", price, strat_name)
+               
               let proceeds = state.position *. price
               io.println("💰 [PaperTrade] SELL " <> state.market_id
                 <> " @ $" <> float.to_string(price)
@@ -104,20 +118,41 @@ fn loop(state: State, msg: Message) -> actor.Next(State, Message) {
             }
             _, _ -> State(..state, peak_balance: new_peak, halted: False)
           }
-          actor.continue(new_state)
-        }
+          
+          // Adaptive Check: Every 10 trades
+          case new_state.trades % 10 == 0 && new_state.trades > 0 {
+             True -> {
+                 let #(best_id, best_strat) = strategy_selector.best_strategy(state.db)
+                 
+                 case best_id != state.active_strategy_id {
+                   True -> {
+                     io.println("🧬 [PaperTrade] Adaptive Logic: Swapping to " <> best_id)
+                     actor.continue(State(..new_state, active_strategy: best_strat, active_strategy_id: best_id))
+                   }
+                   False -> actor.continue(new_state)
+                 }
+             }
+             False -> actor.continue(new_state)
+          }
       }
     }
+    }
 
-    SetStrategy(new_strategy) -> {
-      io.println("🧬 [PaperTrade] Strategy HOT-SWAPPED for " <> state.market_id)
-      actor.continue(State(..state, active_strategy: new_strategy))
+    SetStrategy(new_strategy, new_id) -> {
+      io.println("🧬 [PaperTrade] Strategy HOT-SWAPPED for " <> state.market_id <> " to " <> new_id)
+      actor.continue(State(..state, active_strategy: new_strategy, active_strategy_id: new_id))
     }
 
     GetStatus(reply_to) -> {
       process.send(reply_to, state)
       actor.continue(state)
     }
+    
+    // Self-message for adaptation (could be triggered externally too)
+    // For now, we'll let the supervisor or a tick counter trigger it. 
+    // Let's add a periodic check in the tick loop? 
+    // No, keep it clean. adaptation logic is external or implicit.
+    // Actually, let's trigger it every 100 trades.
   }
 }
 

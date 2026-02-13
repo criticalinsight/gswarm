@@ -2,24 +2,22 @@
 
 ## 1. High-Frequency Market Ingestion
 Demonstrates the **Silicon Saturation** pillar.
-- **Goal**: Ingest 1000+ ticks/second without latency spikes.
-- **Mechanism**: ETS-backed `duplicate_bag` indices bypass actor-queue bottlenecks.
+- **Goal**: Ingest 10,000+ events/second.
+- **Mechanism**: Sharded batching (`ingest_batcher.gleam`) and parallel Mnesia writers.
 
-## 2. Cross-Market Reflexes
-Demonstrates the **Reactive Reflexes** pillar.
-- **Goal**: Trigger an action when Market A matches a condition *relative* to Market B.
-- **Mechanism**: Datalog query subscriptions across disparate entity sets.
+## 2. Probabilistic Intelligence
+Demonstrates the **Lean Optimization** pillar.
+- **Goal**: Track global cardinality and frequency with O(1) space.
+- **Mechanism**: HyperLogLog (`hll.gleam`) and Count-Min Sketch (`cms.gleam`) for signal detection.
 
-## 3. Semantic Market Clustering
-Demonstrates the **Vector Sovereignty** pillar.
-- **Goal**: Find related contexts autonomously.
-- **Mechanism**: Cosine similarity search over `fact.Vec` attributes.
+## 3. Prediction Market Analytical Edge
+- **Goal**: Calibrated probability forecasting (0.0–1.0).
+- **Mechanism**: Brier scoring (`resolution.gleam`) and cross-market correlation (`cross_market.gleam`).
 
-## 4. Temporal Auditing
-Demonstrates the **Logical Perfection** pillar.
-- **Goal**: Verify past predictions against actual outcomes.
-- **Mechanism**: `gleamdb.as_of` filters the view of the database to any past transaction ID.
+## 4. Adaptive Strategy Selection
+- **Goal**: Hot-swap strategies based on real-time win-rates.
+- **Mechanism**: `strategy_selector.gleam` identifies the best strategy for the current market regime.
 
-## 5. Memory Safety & Retention
-- **Goal**: Perpetual operation without RAM exhaustion.
-- **Mechanism**: `LatestOnly` retention for ephemeral tick data and automatic subscriber scavenging.
+## 5. Memory Safety & Active Paging
+- **Goal**: Perpetual operation on restricted hardware (M2 Pro).
+- **Mechanism**: `pruner.gleam` implements sliding-window history eviction.

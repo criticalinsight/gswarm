@@ -1,3 +1,4 @@
+import gleam/io
 import gleam/int
 import gleam/float
 import gleam/list
@@ -8,10 +9,10 @@ import gleamdb/fact
 import gleamdb/shared/types
 import gleamdb/q
 
+
 // --- Core Market Types ---
 
-@external(erlang, "erlang", "phash2")
-fn phash2(x: a) -> Int
+
 
 /// The kind of prediction market.
 /// Binary = Yes/No (probability 0.0–1.0)
@@ -122,23 +123,48 @@ pub fn ingest_prediction_tick(
 ) -> Result(types.DbState, String) {
   use _ <- result.try(validate_prediction_tick(tick))
 
-  let market_id_hash = phash2(tick.market_id)
-  let market_ref = fact.Ref(fact.EntityId(market_id_hash))
+  let market_ref = fact.Ref(fact.EntityId(fact.phash2(tick.market_id)))
   
-  // Deterministic Tick ID
-  let tick_id_hash = phash2(#(tick.market_id, tick.timestamp, tick.outcome))
-  let tick_entity = fact.Uid(fact.EntityId(tick_id_hash))
+  // Deterministic Tick ID (Native Identity Sovereignty)
+  let tick_entity = fact.deterministic_uid(#(tick.market_id, tick.timestamp, tick.outcome))
 
   let facts = [
     #(tick_entity, "tick/market", market_ref),
     #(tick_entity, "tick/outcome", fact.Str(tick.outcome)),
     #(tick_entity, "tick/probability", fact.Float(tick.probability)),
+    #(tick_entity, "tick/price/" <> tick.outcome, fact.Float(tick.probability)),
     #(tick_entity, "tick/volume", fact.Int(tick.volume)),
     #(tick_entity, "tick/timestamp", fact.Int(tick.timestamp)),
-    #(tick_entity, "tick/vector", fact.Vec(vector))
-    // We can also update market latest vector on the market entity itself if needed, 
-    // but for now let's keep it simple.
+    #(tick_entity, "tick/vector", fact.Vec(vector)),
+    
+    // Update market context so Analyst can see the latest state
+    #(fact.deterministic_uid(tick.market_id), "market/latest_vector", fact.Vec(vector))
   ]
+
+  gleamdb.transact(db, facts)
+}
+
+/// Ingest a batch of ticks with their Alpha vectors.
+/// Optimized for Phase 39 High-Throughput (10k/sec).
+pub fn ingest_batch_with_vectors(
+  db: gleamdb.Db,
+  ticks: List(#(PredictionTick, List(Float)))
+) -> Result(types.DbState, String) {
+  let facts = list.flat_map(ticks, fn(pair) {
+    let #(tick, vector) = pair
+    let market_ref = fact.Ref(fact.EntityId(fact.phash2(tick.market_id)))
+    let tick_entity = fact.deterministic_uid(#(tick.market_id, tick.timestamp, tick.outcome))
+
+    [
+      #(tick_entity, "tick/market", market_ref),
+      #(tick_entity, "tick/outcome", fact.Str(tick.outcome)),
+      #(tick_entity, "tick/probability", fact.Float(tick.probability)),
+      #(tick_entity, "tick/volume", fact.Int(tick.volume)),
+      #(tick_entity, "tick/timestamp", fact.Int(tick.timestamp)),
+      #(tick_entity, "tick/vector", fact.Vec(vector)),
+      #(fact.deterministic_uid(tick.market_id), "market/latest_vector", fact.Vec(vector))
+    ]
+  })
 
   gleamdb.transact(db, facts)
 }
@@ -208,6 +234,7 @@ pub fn configure_tick_retention(db: gleamdb.Db) {
   // Internal UID for Lookup mechanism (workaround for indexing issue)
   let _ = gleamdb.set_schema(db, "market/uid", unique_config)
   
+  let _ = gleamdb.set_schema(db, "tick/market", config)
   let _ = gleamdb.set_schema(db, "tick/price/Yes", config)
   let _ = gleamdb.set_schema(db, "tick/probability/YES", config)
   let _ = gleamdb.set_schema(db, "tick/probability/NO", config)
@@ -231,16 +258,15 @@ pub fn create_prediction_market(db: gleamdb.Db, m: Market) -> Result(types.DbSta
     Resolved(w) -> "resolved:" <> w
   }
   // Use deterministic ID hash to bypass Lookup indexing bug (Phase 23 fix)
-  let id_hash = phash2(m.id)
-  let uid = fact.Uid(fact.EntityId(id_hash))
+  let uid = fact.deterministic_uid(m.id)
   
   let facts = [
     #(uid, "market/id", fact.Str(m.id)),
-    #(uid, "market/question", fact.Str(m.question)),
     #(uid, "market/type", fact.Str(type_str)),
     #(uid, "market/status", fact.Str(status_str)),
     #(uid, "market/close_time", fact.Int(m.close_time)),
-    #(uid, "market/source", fact.Str(m.source))
+    #(uid, "market/source", fact.Str(m.source)),
+    #(uid, "market/question", fact.Str(m.question))
   ]
 
   gleamdb.transact(db, facts)
@@ -248,9 +274,10 @@ pub fn create_prediction_market(db: gleamdb.Db, m: Market) -> Result(types.DbSta
 
 /// Legacy: create a simple market (backward compat for tests and crypto).
 pub fn create_market(db: gleamdb.Db, market: Market) -> Result(types.DbState, String) {
+  let uid = fact.deterministic_uid(market.id)
   let facts = [
-    #(fact.Uid(fact.EntityId(100)), "market/id", fact.Str(market.id)),
-    #(fact.Uid(fact.EntityId(100)), "market/question", fact.Str(market.question))
+    #(uid, "market/id", fact.Str(market.id)),
+    #(uid, "market/question", fact.Str(market.question))
   ]
   
   gleamdb.transact_with_timeout(db, facts, 10000)
@@ -287,12 +314,9 @@ pub fn get_probability_series(
   market_id: String, 
   outcome: String
 ) -> Result(List(#(Int, Float)), Nil) {
-  // Resolve Market ID using phash2 to match ingest
-  let market_id_hash = phash2(market_id)
-  
   let query = 
     q.new()
-    |> q.where(types.Var("t"), "tick/market", types.Val(fact.Ref(fact.EntityId(market_id_hash))))
+    |> q.where(types.Var("t"), "tick/market", types.Val(fact.Ref(fact.EntityId(fact.phash2(market_id)))))
     |> q.where(types.Var("t"), "tick/outcome", types.Val(fact.Str(outcome)))
     |> q.where(types.Var("t"), "tick/probability", types.Var("prob"))
     |> q.where(types.Var("t"), "tick/timestamp", types.Var("ts"))
@@ -310,6 +334,7 @@ pub fn get_probability_series(
         }
       })
       // No manual sort needed!
+      io.println("📊 Series for " <> market_id <> ": " <> int.to_string(list.length(series)) <> " items")
       Ok(series)
     }
   }

@@ -3,6 +3,10 @@ import gleam/erlang/process
 import gswarm/node.{type NodeContext}
 import gleamdb
 
+pub fn join_sharded_fabric(role: node.NodeRole, cluster_id: String, shard_count: Int) -> Result(node.ShardedContext, String) {
+  node.start_sharded(role, cluster_id, shard_count)
+}
+
 pub fn join_fabric(role: node.NodeRole, cluster_id: String) -> Result(NodeContext, String) {
   let res = node.start(role, cluster_id)
   
@@ -12,12 +16,11 @@ pub fn join_fabric(role: node.NodeRole, cluster_id: String) -> Result(NodeContex
         node.Follower -> {
           // Spawn Raft Role Watcher
           process.spawn_unlinked(fn() {
-            // Assume we start as Follower (False)
             role_watcher_loop(ctx, False)
           })
           Ok(ctx)
         }
-        node.Leader | node.LeaderEphemeral -> Ok(ctx)
+        node.Leader | node.LeaderEphemeral | node.Lean -> Ok(ctx)
       }
     }
     Error(e) -> Error(e)
@@ -57,7 +60,7 @@ fn role_watcher_loop(ctx: NodeContext, was_leader: Bool) {
 pub fn broadcast_ping(ctx: NodeContext) -> Nil {
   // A simple liveness check across the mesh
   case ctx.role {
-    node.Leader | node.LeaderEphemeral -> Nil // Leader doesn't ping, it rules.
+    node.Leader | node.LeaderEphemeral | node.Lean -> Nil // Leader doesn't ping, it rules.
     node.Follower -> {
       // Future: Implement keepalive to leader
       Nil

@@ -9,29 +9,45 @@ import gleamdb
 import gleamdb/fact
 import gswarm/market
 
+import gswarm/node.{type ShardedContext}
+import gswarm/shard_manager
+import gswarm/sharded_query
+import gleamdb/shared/types
+import gleamdb/q
+
 const scan_interval = 60_000 // Scan every minute
 
 // Start the Cross-Market Intelligence scanner as a standalone process
-pub fn start_link(db: gleamdb.Db) -> Result(process.Pid, String) {
+pub fn start_link(ctx: ShardedContext) -> Result(process.Pid, String) {
   let pid = process.spawn_unlinked(fn() {
-    loop(db)
+    loop(ctx)
   })
   Ok(pid)
 }
 
-fn loop(db: gleamdb.Db) {
-  io.println("🔍 Cross-Market: Scanning for correlations...")
-  let _ = scan_correlations(db)
+fn loop(ctx: ShardedContext) {
+  io.println("🔍 Cross-Market: Scanning for correlations across fabric...")
+  let _ = scan_correlations(ctx)
   
   process.sleep(scan_interval)
-  loop(db)
+  loop(ctx)
 }
 
 // --- Correlation Logic ---
 
-fn scan_correlations(db: gleamdb.Db) -> Result(Nil, Nil) {
-  // 1. Get active markets
-  use markets <- result.try(market.get_active_prediction_markets(db))
+fn scan_correlations(ctx: ShardedContext) -> Result(Nil, Nil) {
+  // 1. Get active markets across ALL shards
+  let query = q.new()
+    |> q.where(types.Var("m"), "market/id", types.Var("id"))
+    |> q.to_clauses
+  
+  let rows = sharded_query.query_all(ctx, query)
+  let markets = list.filter_map(rows, fn(row) {
+    case dict.get(row, "id") {
+      Ok(fact.Str(id)) -> Ok(id)
+      _ -> Error(Nil)
+    }
+  })
   
   // 2. Generate unique pairs
   let pairs = unique_pairs(markets)
@@ -39,17 +55,22 @@ fn scan_correlations(db: gleamdb.Db) -> Result(Nil, Nil) {
   // 3. Analyze each pair
   list.each(pairs, fn(pair) {
     let #(id_a, id_b) = pair
-    analyze_pair(db, id_a, id_b)
+    analyze_pair(ctx, id_a, id_b)
   })
   
   Ok(Nil)
 }
 
-fn analyze_pair(db: gleamdb.Db, id_a: String, id_b: String) {
-  // Fetch probability series for "YES" (or primary outcome)
-  // TODO: Handle non-binary markets? defaulting to first outcome for now.
-  let series_a_res = market.get_probability_series(db, id_a, "YES")
-  let series_b_res = market.get_probability_series(db, id_b, "YES")
+fn analyze_pair(ctx: ShardedContext, id_a: String, id_b: String) {
+  // Fetch probability series from their respective shards
+  let series_a_res = case sharded_query.get_market_db(ctx, id_a) {
+    Ok(db) -> market.get_probability_series(db, id_a, "YES")
+    Error(_) -> Error(Nil)
+  }
+  let series_b_res = case sharded_query.get_market_db(ctx, id_b) {
+    Ok(db) -> market.get_probability_series(db, id_b, "YES")
+    Error(_) -> Error(Nil)
+  }
   
   case series_a_res, series_b_res {
     Ok(series_a), Ok(series_b) -> {
@@ -60,7 +81,7 @@ fn analyze_pair(db: gleamdb.Db, id_a: String, id_b: String) {
           case float.absolute_value(correlation) >. 0.7 {
             True -> {
               io.println("🔗 Strong Correlation (" <> float.to_string(correlation) <> "): " <> id_a <> " <-> " <> id_b)
-              store_correlation_fact(db, id_a, id_b, correlation)
+              store_correlation_fact(ctx, id_a, id_b, correlation)
             }
             False -> Nil
           }
@@ -123,11 +144,11 @@ fn unique_pairs(items: List(String)) -> List(#(String, String)) {
   }
 }
 
-fn store_correlation_fact(db: gleamdb.Db, id_a: String, id_b: String, corr: Float) {
-  let lookup = fact.Lookup(#("market/id", fact.Str(id_a))) // Anchored to market A for now
+fn store_correlation_fact(ctx: ShardedContext, id_a: String, id_b: String, corr: Float) {
+  let db = node.get_primary(ctx)
+  let id_hash = shard_manager.phash2(id_a)
+  let lookup = fact.Uid(fact.EntityId(id_hash))
   
-  // Also store a global fact? Or just log?
-  // Let's store it as a metric on Market A about Market B
   let facts = [
     #(lookup, "metric/correlation/" <> id_b, fact.Float(corr))
   ]

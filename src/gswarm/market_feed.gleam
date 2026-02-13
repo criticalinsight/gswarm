@@ -8,10 +8,10 @@ import gleam/json
 import gleam/dynamic/decode
 import gleam/result
 import gleam/erlang/process
-import gleamdb
 import gswarm/market
 import gswarm/analytics
 import gswarm/paper_trader
+import gswarm/ingest_batcher
 import gleam/option.{type Option, None, Some}
 
 /// A decoded Manifold Markets API response.
@@ -30,21 +30,21 @@ pub type ManifoldMarket {
 /// Start prediction market feeds for a list of Manifold market slugs.
 /// Each market gets its own polling loop (15s interval).
 pub fn start_market_feed(
-  db: gleamdb.Db,
+  batcher: process.Subject(ingest_batcher.Message),
   market_ids: List(String),
   trader: Option(process.Subject(paper_trader.Message))
 ) {
   list.each(market_ids, fn(mid) {
     process.spawn_unlinked(fn() {
       io.println("🎲 MarketFeed: Tracking prediction market [" <> mid <> "]")
-      loop(db, mid, [], trader)
+      loop(batcher, mid, [], trader)
     })
   })
 }
 
 /// Main polling loop: fetch probability, compute Alpha, ingest, broadcast.
 fn loop(
-  db: gleamdb.Db,
+  batcher: process.Subject(ingest_batcher.Message),
   market_id: String,
   history: List(Float),
   trader: Option(process.Subject(paper_trader.Message))
@@ -71,7 +71,9 @@ fn loop(
         volume: float.truncate(mkt.volume),
         timestamp: ts
       )
-      let _ = market.ingest_prediction_tick(db, tick, alpha_vector)
+      
+      // Ingest via Batcher
+      process.send(batcher, ingest_batcher.Ingest(tick, alpha_vector))
 
       // 4. Broadcast to paper trader (probability as "price" for strategy)
       case trader {
@@ -97,14 +99,14 @@ fn loop(
         }
         False -> {
           process.sleep(15_000)
-          loop(db, market_id, new_history, trader)
+          loop(batcher, market_id, new_history, trader)
         }
       }
     }
     Error(e) -> {
       io.println("⚠️ MarketFeed Error [" <> market_id <> "]: " <> e)
       process.sleep(15_000)
-      loop(db, market_id, history, trader)
+      loop(batcher, market_id, history, trader)
     }
   }
 }

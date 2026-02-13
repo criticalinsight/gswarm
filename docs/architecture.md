@@ -4,36 +4,39 @@ Gswarm is designed using the **Rama Pattern** (Write-Optimized Transactional Sto
 
 ## 🧱 Component Topology
 
-### 1. The Transactor Nodes (`gswarm/node.gleam`)
-Nodes boot into active roles (Leader/Follower). The Leader owns the serialized transaction log for a specific Cluster ID, ensuring linearizable consistency across the fabric.
+### 1. Sharded Transactor Nodes (`gswarm/node.gleam`)
+The fabric is horizontally partitioned into **Logical Shards**. A `ShardedContext` coordinates multiple `gleamdb` instances across parallel OS processes. The `Lean` role collapses shards for resource-efficient local simulation.
 
-### 2. Silicon Saturation (`gswarm/ticker.gleam`)
-The Ticker provides high-frequency data ingestion. It stress-tests GleamDB's ETS-backed indices, achieving sub-millisecond write acknowledgement by bypassing expensive disk IO during simulation.
+### 2. Elastic Ingestion (`gswarm/ingest_batcher.gleam`)
+High-throughput ingestion via actor-based batching. Tick data is buffered and flushed as vector-enriched EAVT facts, bypassing serial transactor bottlenecks.
 
-### 3. Reactive Reflexes (`gswarm/reflex.gleam`)
-Subscription actors that derive signal from noise. They use Datalog query subscriptions to watch for complex patterns (e.g., price differentials between independent markets) and trigger autonomous actions.
+### 3. Raft Consensus & Failover (`gswarm/fabric.gleam`)
+Nodes maintain cluster state via a `role_watcher_loop`. If a Leader steps down or fails, the fabric autonomously detects the new Raft leader state and performs **Autohealing**: restarting market tickers and watchers from the durable Mnesia store.
 
-### 4. Vector Sovereignty (`gswarm/context.gleam`)
-The swarm uses Cosine Similarity to understand the semantic proximity of markets. This allows the agent to "cluster" related events (e.g., "AI Progress" vs "Hardware Scalability") without rigid tagging.
+### 4. Probabilistic Intelligence (`gswarm/hll.gleam`, `gswarm/cms.gleam`)
+The system maintains O(1) space approximations of:
+- **Cardinality**: HyperLogLog for unique market tracking across billions of events.
+- **Frequency**: Count-Min Sketch for identifying "hot" market signals in real-time.
+
+---
 
 ## 🔄 Data Flow
 
 ```mermaid
 sequenceDiagram
-    participant T as Ticker
-    participant G as GleamDB
-    participant R as Reflex
-    participant S as Semantic
+    participant F as Manifold Feed
+    participant B as Ingest Batcher
+    participant G as GleamDB (Sharded)
+    participant R as Raft Monitor
     
-    T->>G: Ingest Tick (New Entity + Link)
-    G->>G: Deterministic ID Gen (phash2)
-    G->>G: Apply Retention (LatestOnly)
-    G->>R: Notify (Subject)
-    R->>G: Pull Context (Pull API)
-    R->>S: Find Co-relation (Similarity)
-    Note over R,S: Autonomous Decision Loop
+    F->>B: Raw Probability Tick
+    B->>G: Batch Transact (EAVT + Alpha Vector)
+    G->>R: Update Liveness
+    R->>G: Autoheal on Leader Change (Raft)
+    G->>G: Compact/Prune via Pruner.gleam
 ```
 
 ## 🛡️ Stability & Resilience
-- **Temporal Datalog**: Auditing happens in `analytics.gleam` via `as_of`.
-- **Memory Safety**: `market.gleam` configures the swarm to purge fine-grained tick history while preserving core identity facts.
+- **Resource Awareness**: Lean mode targets the Apple Silicon M2 Pro's efficiency cores.
+- **Durable WAL**: Mnesia ensures facts survive process restarts.
+- **Active Paging**: `pruner.gleam` maintains a sliding window of historical state to bound RAM usage.

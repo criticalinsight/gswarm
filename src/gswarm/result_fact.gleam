@@ -26,19 +26,21 @@ pub fn record_prediction(
   db: gleamdb.Db,
   market_id: String,
   direction: String,
-  price_at_prediction: Float
+  price_at_prediction: Float,
+  strategy_id: String
 ) {
   let ts = erlang_system_time()
-  let pred_id = "pred_" <> market_id <> "_" <> int.to_string(ts)
+  let eid = fact.deterministic_uid(#("pred", market_id, ts))
 
-  let lookup = fact.Lookup(#("prediction/id", fact.Str(pred_id)))
+  let lookup = eid
   let facts = [
-    #(lookup, "prediction/id", fact.Str(pred_id)),
+    #(lookup, "prediction/id", fact.Str("pred_" <> market_id <> "_" <> int.to_string(ts))),
     #(lookup, "prediction/market_id", fact.Str(market_id)),
     #(lookup, "prediction/direction", fact.Str(direction)),
     #(lookup, "prediction/price", fact.Float(price_at_prediction)),
     #(lookup, "prediction/timestamp", fact.Int(ts)),
-    #(lookup, "prediction/status", fact.Str("pending"))
+    #(lookup, "prediction/status", fact.Str("pending")),
+    #(lookup, "prediction/strategy", fact.Str(strategy_id))
   ]
 
   let _ = gleamdb.transact(db, facts)
@@ -97,10 +99,28 @@ fn checker_loop(db: gleamdb.Db, total_checked: Int, total_correct: Int) {
           _, _ -> False
         }
 
+        // Update the prediction fact with the result
         let result_str = case was_correct {
           True -> "correct"
           False -> "incorrect"
         }
+
+        let pred_id_val = case dict.get(row, "prediction/id") {
+          Ok(fact.Str(s)) -> s
+          _ -> "unknown" // Should not happen given query
+        }
+
+        // Write result back to DB (Fact Accretion)
+        // We add a new fact: prediction/result
+        let pid = case dict.get(row, "p") {
+           Ok(fact.Ref(e)) -> fact.Uid(e)
+           _ -> fact.Lookup(#("prediction/id", fact.Str(pred_id_val)))
+        }
+
+        let _ = gleamdb.transact(db, [
+           #(pid, "prediction/result", fact.Str(result_str)),
+           #(pid, "prediction/status", fact.Str("verified"))
+        ])
 
         io.println("🎯 ResultFact: Prediction [" <> pred_direction <> "] → " <> result_str)
 

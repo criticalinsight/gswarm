@@ -9,15 +9,10 @@ Gswarm v1 effectively simulated high-frequency ingestion and reactive triggers. 
 
 ---
 
-## 1. Deep Assessment (Rich Hickey Simulation)
-
-### Current State Analysis
-- **Bottleneck 1: Memory-Only Sovereignty**. Data lives in ETS. A crash equals amnesia. 
-- **Bottleneck 2: Serialized Transactor**. The Leader is a single process. At 1k ops/sec, we are fine. At 10k, the queue becomes the bottleneck.
-- **Bottleneck 3: Shallow Fabric**. Followers are passive clones. There is no partitioning of the reflex logic.
-
-### The Hostile Auditor Perspective
-> "Your 'Silicon Saturation' is a facade. If I flood the 'm_1' market with a burst of 50k ticks, your single leader process will mailbox-overflow while your followers wait for a heartbeat that never comes. You have complected 'speed' with 'stability'."
+## 1. Deep Assessment: The M2 Pro Constraints 🍎💻
+- **Vertical Limit**: 16GB RAM. We cannot afford to keep 10M+ facts in-memory per shard if we have 16 shards. We need **Active Paging** (Mnesia/RocksDB).
+- **Compute Power**: 12 CPU cores. We should aim for 12–16 local shards to fully saturate the M2's hardware parallelism without excessive context-switching.
+- **Goal**: "Fabric on a Chip"—Treating the M2 as a miniature cluster.
 
 ---
 
@@ -91,7 +86,33 @@ sequenceDiagram
 
 ---
 
+## 7. Lean Roadmap: Efficiency-First Fabric 🐝🍃
+
+| Phase | Name | Focus | Core Achievement |
+|-------|------|-------|------------------|
+| 39 | **Sharded Fabric** | ✅ DONE | Basic sharding & batching |
+| 40 | **Gather Engine** | ✅ DONE | Unified view |
+| 41 | **Resource-Aware Node** | ✅ DONE | Shard-collapsing & Lazy Analytics |
+| 42 | **Compact Sovereignty** | ✅ DONE | Binary EAVT & Disk-First Indexing |
+| 43 | **Adaptive Ticking** | ✅ DONE | Dynamic batching & Bloom filters |
+| 44 | **Probabilistic Memory**| ✅ DONE | CMS & HLL Activity Tracking |
+| 45 | **Stream Pruning**      | ✅ DONE | Shard Collapsing & Active Paging |
+| 46 | **Operability Dashboard** | ✅ DONE | HTTP Metrics, HLL/Bloom Visualization |
+| 47 | **Adaptive Strategy**     | ✅ DONE | Hot-swapping strategies based on win-rate |
+| 48 | **High-Fidelity Backtest**| 🔮 PLANNED | Risk-aware, Adaptive, & Paginated Replay |
+
+---
+
+## 8. Efficiency Profile: Low-Impact Mode
+- **Sharding Strategy**: 1–4 Logical Shards (Minimal process overhead).
+- **Storage**: Sequential WAL with background compaction.
+- **Analytics**: Pull-based/Lazy (Compute only when needed for trade, not on every tick).
+- **Network**: Batch-sync to reduce radio/NIC wake-ups.
+
+---
+
 ## Phase 4: Autonomous Handoff
 
-PRD Drafted. Initiate the Autonomous Pipeline: 
+PRD Revised for Restricted Environments.
+Initiate the Autonomous Pipeline for Phase 41 (Lean Optimization):
 `/proceed docs/specs/gswarm_v2_production.md -> /test -> /refactor -> /test`

@@ -1,14 +1,19 @@
 import gleam/otp/actor
 import gleam/option.{Some}
 import gleam/string
+import gleam/dict
 import gleam/erlang/process
 import gleamdb
 import gleamdb/storage/mnesia
+import gleamdb/sharded
+import gswarm/shard_manager.{type ShardRegistry}
+import gswarm/registry_actor
 
 pub type NodeRole {
   Leader
   Follower
   LeaderEphemeral
+  Lean        // Phase 41: Optimized for low resource usage
 }
 
 pub type NodeContext {
@@ -19,35 +24,65 @@ pub type NodeContext {
   )
 }
 
+pub type ShardedContext {
+  ShardedContext(
+    role: NodeRole,
+    db: sharded.ShardedDb,
+    cluster_id: String,
+    registry: ShardRegistry,
+    registry_actor: process.Subject(registry_actor.Message)
+  )
+}
+
+pub fn get_primary(ctx: ShardedContext) -> gleamdb.Db {
+  let assert Ok(db) = dict.get(ctx.db.shards, 0)
+  db
+}
+
+pub fn start_sharded(role: NodeRole, cluster_id: String, shard_count: Int) -> Result(ShardedContext, String) {
+  case role {
+    Leader | Lean -> {
+      case sharded.start_sharded(cluster_id, shard_count, Some(mnesia.adapter())) {
+        Ok(db) -> {
+          let registry = shard_manager.new_registry(shard_count)
+          let assert Ok(actor) = registry_actor.start(shard_count)
+          Ok(ShardedContext(role, db, cluster_id, registry, actor))
+        }
+        Error(e) -> Error("Failed to start sharded leader: " <> e)
+      }
+    }
+    _ -> Error("Follower/Ephemeral sharding not fully implemented in start_sharded")
+  }
+}
+
+
 pub fn start(role: NodeRole, cluster_id: String) -> Result(NodeContext, String) {
   case role {
-    Leader -> {
-      // Use Mnesia for Durable Sovereignty
+    Leader ->
       case gleamdb.start_distributed(cluster_id, Some(mnesia.adapter())) {
         Ok(db) -> Ok(NodeContext(Leader, db, cluster_id))
-        Error(e) -> Error("Failed to start leader: " <> string_error(e))
+        Error(e) -> Error(string_error(e))
       }
-    }
-    LeaderEphemeral -> {
-      // Ephemeral for benchmarking engine raw capacity
-      case gleamdb.start_distributed(cluster_id, option.None) {
-        Ok(db) -> Ok(NodeContext(Leader, db, cluster_id))
-        Error(e) -> Error("Failed to start ephemeral leader: " <> string_error(e))
-      }
-    }
-    Follower -> {
-      // Followers connect to the existing fabric
+    Follower ->
       case gleamdb.connect(cluster_id) {
         Ok(db) -> Ok(NodeContext(Follower, db, cluster_id))
-        Error(e) -> Error("Failed to connect follower: " <> e)
+        Error(e) -> Error(e)
       }
+    Lean ->
+      case gleamdb.start_named(cluster_id, Some(mnesia.adapter())) {
+        Ok(db) -> Ok(NodeContext(Lean, db, cluster_id))
+        Error(e) -> Error(string_error(e))
+      }
+    LeaderEphemeral -> {
+      let db = gleamdb.new()
+      Ok(NodeContext(LeaderEphemeral, db, cluster_id))
     }
   }
 }
 
 pub fn promote_to_leader(ctx: NodeContext) -> Result(NodeContext, String) {
   case ctx.role {
-    Leader | LeaderEphemeral -> Ok(ctx)
+    Leader | LeaderEphemeral | Lean -> Ok(ctx)
     Follower -> {
       // Autonomous Promotion: Restart node as Leader
       start(Leader, ctx.id)
@@ -58,11 +93,23 @@ pub fn promote_to_leader(ctx: NodeContext) -> Result(NodeContext, String) {
 import gleamdb/global
 
 pub fn stop(ctx: NodeContext) {
+  // Clean up global registry FIRST to avoid hangs in Erlang/global
+  let _ = global.unregister("gleamdb_leader")
+  let _ = global.unregister("gleamdb_" <> ctx.id)
+
   let assert Ok(pid) = process.subject_owner(ctx.db)
+  process.unlink(pid)
   process.kill(pid)
-  // Clean up global registry
-  global.unregister("gleamdb_leader")
-  global.unregister("gleamdb_" <> ctx.id)
+}
+
+pub fn stop_sharded(ctx: ShardedContext) {
+  let _ = sharded.stop(ctx.db)
+  
+  let assert Ok(reg_pid) = process.subject_owner(ctx.registry_actor)
+  process.unlink(reg_pid)
+  process.kill(reg_pid)
+  
+  Nil
 }
 
 fn string_error(err: actor.StartError) -> String {

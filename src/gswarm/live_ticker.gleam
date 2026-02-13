@@ -8,25 +8,25 @@ import gleam/json
 import gleam/dynamic/decode
 import gleam/result
 import gleam/erlang/process
-import gleamdb
 import gswarm/market
 import gswarm/analytics
 import gswarm/paper_trader
+import gswarm/ingest_batcher
 import gleam/option.{type Option, None, Some}
 
 pub fn start_live_ticker(
-  db: gleamdb.Db,
+  batcher: process.Subject(ingest_batcher.Message),
   market_id: String,
   asset_pair: String,
   trader: Option(process.Subject(paper_trader.Message))
 ) {
   process.spawn_unlinked(fn() {
-    loop(db, market_id, asset_pair, [], trader)
+    loop(batcher, market_id, asset_pair, [], trader)
   })
 }
 
 fn loop(
-  db: gleamdb.Db,
+  batcher: process.Subject(ingest_batcher.Message),
   market_id: String,
   asset_pair: String,
   history: List(#(Float, Int)),
@@ -47,7 +47,7 @@ fn loop(
         price_list, volume_list, ts
       )
 
-      let tick = market.Tick(
+      let _tick = market.Tick(
         market_id: market_id,
         outcome: "Yes",
         price: price,
@@ -55,8 +55,11 @@ fn loop(
         timestamp: ts,
       )
 
-      // Ingest with full Alpha vector
-      let _ = market.ingest_tick_with_vector(db, tick, alpha_vector)
+      // Ingest via Batcher (Phase 43 Adaptive Ticking)
+      process.send(batcher, ingest_batcher.Ingest(
+        market.PredictionTick(market_id, "Yes", price /. 100_000.0, volume, ts), // Mock prob for legacy
+        alpha_vector
+      ))
 
       // 4. Broadcast to Paper Trader (if any)
       case trader {
@@ -64,20 +67,28 @@ fn loop(
         None -> Nil
       }
 
-      // Logging
+      // Logging & Adaptive Polling
       let vol_short = analytics.std_dev(list.take(price_list, 10))
       io.println("📡 Alpha [" <> market_id <> "]: " <> asset_pair
         <> " $" <> float.to_string(price)
         <> " | Vol: " <> int.to_string(volume)
         <> " | σ(10): " <> float.to_string(vol_short))
 
-      process.sleep(5000)
-      loop(db, market_id, asset_pair, new_history, trader)
+      // Adaptive Polling: 
+      // High Volatility -> 5s
+      // Low Volatility -> 30s
+      let sleep_ms = case vol_short >. 5.0 {
+        True -> 5000
+        False -> 30000
+      }
+      
+      process.sleep(sleep_ms)
+      loop(batcher, market_id, asset_pair, new_history, trader)
     }
     Error(e) -> {
       io.println("⚠️ Live Feed Error [" <> asset_pair <> "]: " <> e)
-      process.sleep(5000)
-      loop(db, market_id, asset_pair, history, trader)
+      process.sleep(30000) // Longer sleep on error in lean mode
+      loop(batcher, market_id, asset_pair, history, trader)
     }
   }
 }

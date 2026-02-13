@@ -77,3 +77,31 @@ pub fn cross_signal(vector: List(Float)) -> Action {
     _ -> Hold                         // No clear signal
   }
 }
+// --- Helpers ---
+
+pub fn to_string(_strategy: Strategy) -> String {
+  // We can't compare functions directly.
+  // BUT: We can cheat by applying them to a known vector and checking behavior? No.
+  // The only way is if the Strategy type was a custom type wrapping the fn.
+  // For now, let's assume the callers (paper_trader) track the ID manually?
+  // Wait, paper_trader holds `active_strategy: Strategy`. It lost the ID.
+  
+  // REFACTOR: Strategy should be a custom type!
+  // type Strategy { Strategy(id: String, run: fn(List(Float)) -> Action) }
+  
+  // Checking `strategy.gleam`: "pub type Strategy = fn(List(Float)) -> Action"
+  // Changing this is a big refactor.
+  
+  // ALTERNATIVE: paper_trader state tracks `active_strategy_id: String` alongside the fn.
+  "unknown" 
+}
+
+pub fn from_string(id: String) -> Strategy {
+  case id {
+    "mean_reversion" -> mean_reversion
+    "trend_follower" -> trend_follower
+    "sentiment_momentum" -> sentiment_momentum
+    "cross_signal" -> cross_signal
+    _ -> mean_reversion // Default
+  }
+}
