@@ -4,6 +4,9 @@ import gleam/erlang/process
 import gleam/erlang/atom
 import gleamdb
 import gswarm/market
+import gswarm/context
+import gleam/list
+import gleam/float
 
 @external(erlang, "erlang", "system_time")
 fn erlang_system_time(a: atom.Atom) -> Int
@@ -47,18 +50,38 @@ fn loop(
   // Transact every batch_size ticks
   let #(next_batch, latency) = case count % batch_size == 0 {
     True -> {
+      // 1. Check for anomaly BEFORE ingestion 🧙🏾‍♂️
+      case count % 100 == 0 {
+        True -> {
+          case list.first(new_batch) {
+            Ok(t) -> {
+             case context.detect_anomaly(db, t) {
+               True -> io.println("🚨 ANOMALY DETECTED in " <> market_id <> ": Price " <> float.to_string(t.price))
+               False -> Nil
+             }
+            }
+            _ -> Nil
+          }
+        }
+        False -> Nil
+      }
+
+      // 2. Measure Latency & Ingest
       let ms = atom.create("millisecond")
       let start_time = erlang_system_time(ms)
+      
       case market.ingest_batch(db, new_batch) {
         Ok(_) -> Nil
         Error(e) -> io.println("⚠️ Batch ingest failed: " <> e)
       }
+      
       let end_time = erlang_system_time(ms)
       
       case count % 100 == 0 {
         True -> io.println("⚡️ [" <> market_id <> "] Ingested " <> int.to_string(count) <> " ticks")
         False -> Nil
       }
+      
       #([], end_time - start_time)
     }
     False -> #(new_batch, 0)

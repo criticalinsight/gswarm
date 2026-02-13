@@ -25,7 +25,8 @@ sequenceDiagram
     participant R as Reflex
     participant S as Semantic
     
-    T->>G: Ingest Tick (EAVT Assert)
+    T->>G: Ingest Tick (New Entity + Link)
+    G->>G: Deterministic ID Gen (phash2)
     G->>G: Apply Retention (LatestOnly)
     G->>R: Notify (Subject)
     R->>G: Pull Context (Pull API)

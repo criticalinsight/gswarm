@@ -10,10 +10,11 @@ Gswarm is a distributed trading swarm simulation built on **GleamDB**. It demons
 3.  **Vector Sovereignty**: Semantic market clustering using GleamDB's native vector similarity.
 4.  **Logical Perfection**: Temporal auditing via `as_of` and structured entity snapshots via `pull`.
 5.  **Memory Safety**: Retention policies prevent memory exhaustion during long-running simulations.
+6.  **Energy Efficiency**: Optimized for Apple Silicon (`+sbwt none +S 4:2`) to run cool on efficiency cores.
 
 ## 🛠️ Implementation Details
 - **`gswarm.gleam`**: Orchestrator for leader boot and cluster heartbeat.
-- **`market.gleam`**: EAVT schema definition and retention configuration.
+- **`market.gleam`**: Defines `Market` and `Tick` entities (Entity-per-Tick model) with deterministic IDs.
 - **`ticker.gleam`**: High-frequency data generator (Silicon Saturation).
 - **`reflex.gleam`**: Datalog subscription logic (Reactive Reflexes).
 - **`context.gleam`**: Vector similarity search (Vector Sovereignty).

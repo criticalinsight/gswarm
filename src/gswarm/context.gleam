@@ -5,6 +5,8 @@ import gleamdb
 import gleamdb/shared/types.{Var}
 import gleamdb/fact
 import gswarm/semantic
+import gswarm/market
+import gleam/int
 
 pub fn index_market_semantics(db: gleamdb.Db, market_id: String, question: String) {
   let embedding = semantic.generate_embedding(question)
@@ -30,7 +32,7 @@ pub fn find_similar_markets(db: gleamdb.Db, question: String) {
   case list.is_empty(results) {
     True -> io.println("🧠 Context: No similar markets found.")
     False -> {
-      io.println("🧠 Context: Found " <> int_to_string(list.length(results)) <> " similar markets.")
+      io.println("🧠 Context: Found " <> int.to_string(list.length(results)) <> " similar markets.")
       list.each(results, fn(r) {
         case dict.get(r, "id") {
           Ok(fact.Str(id)) -> io.println("   - " <> id)
@@ -41,4 +43,18 @@ pub fn find_similar_markets(db: gleamdb.Db, question: String) {
   }
 }
 
-fn int_to_string(_i: Int) -> String { "many" }
+
+pub fn detect_anomaly(db: gleamdb.Db, tick: market.Tick) -> Bool {
+  let vec = market.tick_to_vector(tick)
+  
+  // Find nearest neighbor in "normal" cluster
+  let query = [
+    // We search across ALL ticks (global anomaly detection)
+    types.Similarity("v", vec, 0.95) // Very high similarity means normal
+  ]
+  
+  let results = gleamdb.query(db, query)
+  
+  // If no very similar tick exists, it's an anomaly (or new regime)
+  list.is_empty(results)
+}

@@ -97,5 +97,43 @@ pub fn spawn_multi_market_watcher(db: gleamdb.Db, market_a: String, market_b: St
     
     io.println("🔔 Reflex: Cross-Market Join Watcher spawned for " <> market_a <> " & " <> market_b)
     watcher_loop(subject)
+    watcher_loop(subject)
   })
+}
+
+pub fn spawn_prediction_watcher(db: gleamdb.Db, market_id: String) {
+  process.spawn_unlinked(fn() {
+    let subject = process.new_subject()
+    
+    // Subscribe to probability updates (any outcome)
+    // We start with "YES" but ideally should watch all?
+    // Let's watch "tick/probability/YES" for now as primary signal.
+    let query = [
+      gleamdb.p(#(types.Var("m"), "market/id", types.Val(fact.Str(market_id)))),
+      gleamdb.p(#(types.Var("m"), "tick/probability/YES", types.Var("prob")))
+    ]
+    
+    gleamdb.subscribe(db, query, subject)
+    
+    io.println("🔔 Reflex [" <> market_id <> "]: Prediction Watcher spawned.")
+    prediction_watcher_loop(market_id, subject)
+  })
+}
+
+fn prediction_watcher_loop(market_id: String, subject: Subject(types.ReactiveDelta)) {
+  let assert Ok(delta) = process.receive(subject, 100000)
+  
+  case delta {
+    types.Initial(_) -> Nil
+    types.Delta(added, _removed) -> {
+      case list.is_empty(added) {
+        True -> Nil
+        False -> {
+           io.println("🔔 Reflex [" <> market_id <> "]: 🔮 Probability Update! Batch size: " <> int.to_string(list.length(added)))
+        }
+      }
+    }
+  }
+  
+  prediction_watcher_loop(market_id, subject)
 }
