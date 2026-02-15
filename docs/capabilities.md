@@ -25,3 +25,19 @@ Demonstrates the **Insider Detection** pillar.
 ## 6. Configurable Query Parallelism
 - **Goal**: Tune concurrency to match hardware and workload.
 - **Mechanism**: GleamDB's `Config(parallel_threshold, batch_size)` via `gleamdb.set_config`. Lower thresholds for tick storms, higher for analytical queries.
+
+## 7. Graph-Theoretic Alpha Extraction
+- **Goal**: Identify complex market structures (e.g., wash-trading, influence rings).
+- **Mechanism**: GleamDB `Graph Suite` predicates like `cycle_detect` and `pagerank` running over "trades_with" edges.
+
+## 8. Bitemporal Market Replay
+- **Goal**: Deterministic analysis of past market regimes with historical precision.
+- **Mechanism**: `Chronos` (v2.0) bitemporal queries using `as_of_valid` to separate tick ingestion time from market occurrence time.
+
+## 9. Speculative Trade Simulation
+- **Goal**: Risk-free "What-if" analysis of trade execution.
+- **Mechanism**: `Speculative Soul` (`with_facts`) creates immediate, non-persistent state forks for querying hypothetical scenarios.
+
+## 10. Invisible Query Optimization
+- **Goal**: High-performance intelligence scans without manual query tuning.
+- **Mechanism**: `Navigator` cost-based planner automatically optimizes join orders based on data statistics.

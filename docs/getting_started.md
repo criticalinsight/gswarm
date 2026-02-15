@@ -33,8 +33,9 @@ Upon running, the alpha engine will:
 1.  **Initialize**: Join the sharded fabric and boot the **Supervision Tree**.
 2.  **Ingestion**: Start the `market_feed` (Manifold) and `live_ticker` (Coinbase) loops.
 3.  **Insider Detection**: Logs will show "Lead-Time Lag" calculations for active traders.
-4.  **Intelligence Dashboard**: Visit `http://localhost:8085/` to see the live metrics and Insider Leaderboard.
-5.  **Micro-Execution**: The `copytrader` will execute simulated $10 trades when high-confidence insiders move.
+4.  **Graph Intelligence**: Periodic background scans (every 5 min) will run. Look for "Intelligence Scan" headers in the logs indicating PageRank, SCC, and Aggregate statistics.
+5.  **Intelligence Dashboard**: Visit `http://localhost:8085/` to see live metrics, Insider Leaderboard, and the new **Graph Intelligence** stats.
+6.  **Micro-Execution**: The `copytrader` will execute simulated $10 trades when high-confidence insiders move.
 
 ## ⚙️ Tuning Parallelism
 For high-throughput workloads, tune GleamDB's parallelism settings in your startup code:

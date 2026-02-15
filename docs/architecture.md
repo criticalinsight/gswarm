@@ -22,6 +22,13 @@ The system maintains O(1) space approximations of:
 - **Cardinality**: HyperLogLog for unique market tracking across billions of events.
 - **Frequency**: Count-Min Sketch for identifying "hot" market signals in real-time.
 
+### 5. Graph Intelligence Hub (`gswarm/graph_intel.gleam`)
+A periodic analytical battery that leverages GleamDB v2.0.0 features:
+- **Sovereign Intelligence**: Distributed aggregation (`q.avg`) for cross-market statistics.
+- **Navigator**: Query planner visibility (`explain`) for optimizing intelligence scans.
+- **Graph Suite**: Cycle detection for wash-trading, SCC for community identification, and PageRank for influence scoring.
+- **Speculative Soul**: `with_facts` for "What-if" trade simulation without side effects.
+
 ---
 
 ## 🔄 Data Flow
@@ -31,12 +38,19 @@ sequenceDiagram
     participant F as Manifold Feed
     participant B as Ingest Batcher
     participant I as Insider Detector
+    participant GI as Graph Intel (v2)
     participant G as GleamDB (Sharded)
     participant C as Copytrader ($10)
     
     F->>B: Trade Activity / Probability Tick
     B->>I: Compute Lead-Time Lag
     I->>G: Persist Insider Fact
+    
+    loop Every 5 Minutes
+        GI->>G: Intelligence Scan (Aggregates + Graph)
+        GI->>G: Speculative Trade Simulation
+    end
+
     I->>C: Trigger Micro-Copytrade (If Verified)
     C->>G: Record Execution Result
     G->>G: Compact/Prune via Pruner.gleam
