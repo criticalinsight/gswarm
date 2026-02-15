@@ -37,7 +37,7 @@ Currently, `context.gleam` and `semantic.gleam` provide vector similarity search
 
 ### Aggregation logic
 - Map-Reduce pattern:
-  - **Map**: Shards compute local cosine similarity.
+  - **Map**: Shards compute local cosine similarity. Each shard uses the **Navigator** cost-based planner to optimize the scanning of large vector sets.
   - **Reduce**: Aggregator collects `#(distance, id)` tuples and sorts them.
 
 ---

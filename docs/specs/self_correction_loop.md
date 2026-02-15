@@ -31,7 +31,8 @@
 ## 4. Technical Implementation
 
 ### Logic: `strategy_selector.gleam` [MODIFY]
-- Query `calibration_fact` stores.
+- Query `calibration_fact` stores. Use the **Navigator** cost-based planner to optimize retrieval of historical Brier scores across sharded history.
+- Leveraging **Chronos** (valid-time semantics), ensure the wisdom score is computed against the *exact* valid-time regime of the prediction, preventing temporal drift in calibration scoring.
 - Implement a `wisdom_score = win_rate *. (1.0 - brier_score)`.
 - Use this score for the hot-swap decision.
 

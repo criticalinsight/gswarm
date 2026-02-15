@@ -28,34 +28,27 @@ Gswarm currenty ingests real-time "Alpha" vectors (Volatility, Trend). We need t
 - **Then** it must update its virtual wallet if the strategy triggers a trade.
 - **Then** it must log the "Slippage" (difference between signaled price and simulated fill).
 
-## Technical Implementation
+### Technical Implementation
 
-### Database Schema
-We will add an `Outcome` entity type to relate a `MarketState` to the future.
-```gleam
-#(fact.Lookup(#("market/id", fact.Str(id))), "tick/outcome/next_5m", fact.Float(price_change))
-```
+#### Bitemporal Accuracy (Chronos)
+We leverage GleamDB v2.0 **Chronos** to separate "Transaction Time" (when we record) from "Valid Time" (when the market event occurred). This eliminates look-ahead bias by querying `as_of_valid(T)` to ensure the strategy only sees what was known at simulation time $T$.
 
-### Metrics Expansion (The "Alpha-50")
-The `live_ticker` will be extended to calculate:
-- **Trend**: SMA(10, 20, 50), EMA, MACD.
-- **Momentum**: RSI, Stochastic, ROC.
-- **Volatility**: ATR, Bollinger Bands, StdDev.
-- **Volume**: OBV, CMF, VWAP.
-- **Context**: News Sentiment (Magnitude/Freq), Fractal Similarity.
+#### Speculative Execution (Speculative Soul)
+The `paper_trader` uses `with_facts` to create ephemeral state forks. This allows the trader to simulate trades, calculate "What-if" portfolio impacts, and run PageRank based influence scans on the speculative state without polluting the durable store.
 
 ### Visual Architecture
 ```mermaid
 sequenceDiagram
     participant LT as Live Ticker
-    participant DB as GleamDB (Mnesia)
-    participant PT as Paper Trader
-    participant BT as Backtest Engine
+    participant G as GleamDB (Chronos)
+    participant PT as Paper Trader (Speculative)
+    participant BT as Backtest Engine (Bitemporal)
 
-    LT->>DB: Ingest Vec(50) + Price
+    LT->>G: transact_at(T_valid, Fact)
     LT->>PT: Emit Signal
-    PT->>DB: Record Simulated Trade
-    BT->>DB: Fetch History
+    PT->>G: with_facts(speculative_trades)
+    PT->>PT: engine.run(speculative_state)
+    BT->>G: query(as_of_valid: T_range)
     BT->>BT: Replay Logic
     BT->>Developer: Display Results
 ```

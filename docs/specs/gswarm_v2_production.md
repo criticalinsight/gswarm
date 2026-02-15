@@ -100,9 +100,10 @@ sequenceDiagram
 | 46 | **Operability Dashboard** | ✅ DONE | HTTP Metrics, HLL/Bloom Visualization |
 | 47 | **Adaptive Strategy**     | ✅ DONE | Hot-swapping strategies based on win-rate |
 | 48 | **High-Fidelity Backtest**| ✅ DONE | Risk-aware, Adaptive, & Paginated Replay |
-| 49 | **Sentiment NLP**         | 🔮 PLANNED | Heuristic keyword-based sentiment facts |
-| 50 | **Distributed V-Link**    | 🔮 PLANNED | Global similarity search across shards |
-| 51 | **Self-Correction Loop**  | 🔮 PLANNED | Calibration-aware signal gating |
+| 49 | **GleamDB v2.0.0**         | ✅ DONE | Speculative, Navigator, Chronos, Graph, Intelligence |
+| 50 | **Sentiment NLP**         | 🔮 PLANNED | Heuristic keyword-based sentiment facts |
+| 51 | **Distributed V-Link**    | 🔮 PLANNED | Global similarity search across shards |
+| 52 | **Self-Correction Loop**  | 🔮 PLANNED | Calibration-aware signal gating |
 
 ---
 

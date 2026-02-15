@@ -41,10 +41,11 @@ Gswarm's sole purpose is now to identify "Insider Alpha"—traders who consisten
 
 ### Global Search & Analytics
 - **Lead-Time Engine**: Analyzes the delta between `TradeActivity.timestamp` and the next `Tick.probability` inflection point.
+- **Coordinated Detection (v2.0)**: Uses the GleamDB **Graph Suite** (`q.cycle_detect`, `q.strongly_connected_components`) to identify rings of traders that coordinate entries to signal alpha to each other.
 - **Competence Filter**: A weighted average of:
-    - Brier Score (Accuracy)
+    - Brier Score (Accuracy) — Optimized via **Navigator** for sharded history scans.
     - Lead-Time Lag (Insider Signal)
-    - Sharpness (Conviction)
+    - Global Confidence — Aggregated across all shards using **Sovereign Intelligence** (`q.avg`).
 
 ---
 

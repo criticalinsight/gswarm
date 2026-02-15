@@ -41,7 +41,18 @@ case raw_estimate <=. 2.5 *. m {
 ## 4. Build Stability vs. Deprecations ✅ RESOLVED
 
 **Problem**: `list.range` is deprecated in favor of `int.range`.
-**Context**: Bulk replacing logic caused build failures due to arity mismatches and missing imports in the current environment.
-**Original Decision**: We prioritized a **passing build** and **green tests** over zero warnings.
-**Resolution**: All `list.range` calls in GleamDB have been migrated to `int.range` reducer pattern. Key insight: `int.range` is **exclusive** on the upper bound (`list.range(1, 10)` → `int.range(from: 1, to: 11, ...)`). GleamDB now builds with zero deprecation warnings.
-**Takeaway**: Refactoring core standard library usage should be treated as a major migration, not a quick cleanup—but it must eventually be done to avoid accumulating debt.
+**Context**: Bulk replacing logic caused build failures due to arity mismatches and missing imports.
+**Resolution**: All calls migrated to `int.range` with exclusive upper-bound adjustment.
+
+## 5. GleamDB v2.0 Dogfooding Friction (Phase 32)
+
+**Problem**: The `Db` vs `DbState` dichotomy.
+**Context**: Integrating `with_facts` for speculative trading.
+**Discovery**: `with_facts` returns a `DbState` (pure value). The public `gleamdb.query` API requires a `Db` (actor handle). This creates a leakage where Speculative Soul queries MUST use the internal `engine.run(state, ...)` rather than the standard `query` API.
+**Takeaway**: Future versions should unify querying for both persistent handles and speculative values.
+
+## 6. Graph Predicate Type Safety
+
+**Problem**: "Silent Empty Results" in cycle detection.
+**Discovery**: `graph_intel.gleam` produced zero cycles because trade edges were initially stored as `String` market IDs. Graph algorithms strictly require `Ref(EntityId)`.
+**Solution**: Standardize on `fact.Ref(fact.EntityId(shard_key(market_id)))` for all graph edges.

@@ -281,20 +281,13 @@ pub fn calibration_report(db: Db) -> List(#(String, Float))
 
 ```gleam
 // cross_market.gleam [NEW]
-pub fn compute_market_correlation(
-  db: Db,
-  market_a: String,
-  market_b: String
-) -> Float
-// Pearson correlation of probability time series
-
-pub fn find_leading_indicators(db: Db, target_market: String) -> List(#(String, Float))
-// Which other markets' probability changes predict this market's movement?
-// Returns [(market_id, correlation_coefficient)]
-
 pub fn start_cross_market_scanner(db: Db) -> Nil
-// Periodically compute pairwise correlations across all tracked markets
-// Store as correlation facts for the strategy selector
+// Periodically compute pairwise correlations across all tracked markets 
+// using GleamDB v2.0 **Graph Suite**.
+// 1. Identify "influence edges" between markets.
+// 2. Use `q.pagerank` to find dominant market drivers.
+// 3. Use `q.cycle_detect` to find feedback loops across prediction sets.
+// Store as correlation facts for the strategy selector.
 ```
 
 #### Acceptance Criteria

@@ -45,3 +45,8 @@ We realized the **Paper Trader** was trading blindly.
     - The `StrategySelector` queries these Results to hot-swap logic.
 
 **Conclusion**: The system now *closes the loop*. It is no longer just a feed reader; it is a learning organism.
+
+## 6. Bitemporal and Speculative Learnings (v2.0)
+Integrating **Speculative Soul** and **Chronos** solved the "Simulation Credibility" problem.
+- **Speculative Trading**: Using `with_facts` allowed the Paper Trader to simulate bets and calculate virtual Brier scores *before* resolution without side effects on persistent storage.
+- **Historical Precision**: `as_of_valid` enabled replaying political markets with exact temporal sequence, preventing the "look-ahead" leakage where a poll result from 2pm is used to predict a market move at 1pm.

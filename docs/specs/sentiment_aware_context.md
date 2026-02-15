@@ -40,6 +40,7 @@ Gswarm currently ingests news headlines via `news_feed.gleam`, but the "vectoriz
 ### Logic: `news_feed.gleam`
 - Implement a `keyword_scorer` that recognizes common financial terms (Approved, Rejected, Hack, Bull, Bear).
 - Normalize scores to `[-1.0, 1.0]`.
+- Leverage GleamDB v2.0 **Sovereign Intelligence** (`q.avg`) to perform high-performance aggregate scans over sentiment vectors across multiple shards to identify global market bias.
 
 ---
 
