@@ -56,11 +56,41 @@ GleamDB v2.0.0 has been successfully integrated into Gswarm and verified under l
 | 31 | Aggregates | 9/10 | Low | High |
 | 32 | Graph Suite | 9.5/10 | Low | Ultra |
 
+---
+
+## Deep Architectural Insights
+
+### 7. Sovereign Synchronization (The "Visibility Gap")
+During live dogfooding, we observed "Empty Results" for aggregates even when facts were being ingested at 130+ per second.
+- **Cause**: In a sharded context, facts transacted to Shard 0 are not immediately visible to Shard-local analytical loops if there is an actor-mailbox backlog.
+- **Learning**: Distributed systems require a "Settling Time" (we added a 10s grace period) or an explicit "Sync" primitive before running analytical batteries.
+
+### 8. Silicon Saturation (M2 Pro Performance)
+GleamDB’s `Config(parallel_threshold, batch_size)` is critical for the M2.
+- **Observation**: Over-parallelizing small query sets (e.g., <500 datoms) increases overhead due to Gleam/OTP process spawning.
+- **Tuning**: In Gswarm, setting `parallel_threshold: 200` proved optimal for keeping the M2's efficiency cores saturated without drowning the performance cores in coordination.
+
+### 9. The Metadata Mystery (Chronos)
+`as_of_valid(T)` returns a standard `List(Dict)`.
+- **Friction**: There is no distinction between "This fact was true at T" and "This fact was *added* to history at T".
+- **Recommendation**: Return `Metadata` alongside query results that includes the `tx_id` and `valid_from` values to allow for easier debugging of retroactive corrections.
+
+### 10. Graph Locality Constraints
+GleamDB v2.0 graph predicates (SCC, PageRank) are **Locality-Aware**.
+- **Observation**: They operate on the shard-local state.
+- **Mitigation**: Gswarm uses a deterministic `shard_key(market_id)` for the `trades_with` edges to ensure that trading clusters stay localized on a single shard, making cycle detection possible without cross-shard joins.
+
+### 11. The DSL vs. Ergonomics Balance
+Constructing aggregates like `q.avg` requires nesting a `QueryBuilder` inside another.
+- **Friction**: This leads to verbose `List(BodyClause)` nesting.
+- **Insight**: A more fluent `q.where(...).avg(...)` would significantly improve the DX for analytical pipelines.
+
 ## Strategic Recommendations
 
-1. **Unify `Db` / `DbState` Querying**: The public API needs a unified way to query both actor handles and pure state values without leaking `engine` internals.
+1. **Unify `Db` / `DbState` Querying**: The public API needs a unified way to query both actor handles and pure state values.
 2. **Persistent Constraints**: `register_composite` should be durable.
 3. **Graph Type Safety**: `engine` should log warnings if graph predicates hit non-Ref attributes.
+4. **Visibility Guarantees**: Add `gleamdb.sync(db)` to ensure all pending transactions are flushed before an analytical scan starts.
 
 ---
 *Generated from dogfood session: 2026-02-15*
