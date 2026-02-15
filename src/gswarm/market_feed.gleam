@@ -13,6 +13,7 @@ import gswarm/analytics
 import gswarm/paper_trader
 import gswarm/ingest_batcher
 import gleam/option.{type Option, None, Some}
+import gleam/string
 
 /// A decoded Manifold Markets API response.
 pub type ManifoldMarket {
@@ -150,6 +151,152 @@ fn decode_manifold(json_str: String) -> Result(ManifoldMarket, String) {
   case json.parse(from: json_str, using: decoder) {
     Ok(m) -> Ok(m)
     Error(_) -> Error("Manifold JSON decode failed")
+  }
+}
+
+// --- PolyMarket Integration ---
+
+pub type PolyMarket {
+  PolyMarket(
+    id: String,
+    question: String,
+    active: Bool,
+    closed: Bool,
+    volume: Float
+  )
+}
+
+pub type PolyMarketTrade {
+  PolyMarketTrade(
+    asset_id: String,
+    price: Float,
+    size: Float,
+    side: String,
+    timestamp: Int
+  )
+}
+
+/// Start a PolyMarket feed for a specific list of market IDs (Token IDs).
+pub fn start_polymarket_feed(
+  batcher: process.Subject(ingest_batcher.Message),
+  market_ids: List(String),
+  trader: Option(process.Subject(paper_trader.Message))
+) {
+  list.each(market_ids, fn(mid) {
+    process.spawn_unlinked(fn() {
+      io.println("🔵 PolyMarket Feed: Tracking [" <> mid <> "]")
+      poly_loop(batcher, mid, [], trader)
+    })
+  })
+}
+
+fn poly_loop(
+  batcher: process.Subject(ingest_batcher.Message),
+  market_id: String,
+  history: List(Float),
+  trader: Option(process.Subject(paper_trader.Message))
+) {
+  let ts = erlang_system_time()
+  
+  // For PolyMarket, we fetch the price of the 'YES' token (Outcome 1 usually)
+  // GET https://clob.polymarket.com/price?token_id=...
+  case fetch_poly_price(market_id) {
+    Ok(price) -> {
+       // 1. Update history
+       let new_history = [price, ..list.take(history, 199)]
+       
+       // Mock volume for now as price endpoint doesn't return it
+       let volume_list = list.repeat(0, 200) 
+       
+       let alpha_vector = analytics.calculate_all_metrics_with_time(
+         new_history, volume_list, ts
+       )
+
+       // 3. Create prediction tick
+       let tick = market.PredictionTick(
+         market_id: "pm_" <> market_id, // Prefix to namespace it
+         outcome: "YES",
+         probability: price,
+         volume: 0, // No volume from simple price endpoint
+         timestamp: ts
+       )
+
+       process.send(batcher, ingest_batcher.Ingest(tick, alpha_vector))
+       
+       case trader {
+         Some(t) -> paper_trader.broadcast_tick(t, price, alpha_vector)
+         None -> Nil
+       }
+       
+       io.println("🔵 Poly [" <> market_id <> "]: " <> float.to_string(price))
+       
+       process.sleep(1000) // 1s poll for Clob
+       poly_loop(batcher, market_id, new_history, trader)
+    }
+    Error(e) -> {
+      io.println("⚠️ PolyMarket Error [" <> market_id <> "]: " <> e)
+      process.sleep(5000)
+      poly_loop(batcher, market_id, history, trader)
+    }
+  }
+}
+
+fn fetch_poly_price(token_id: String) -> Result(Float, String) {
+  let url = "https://clob.polymarket.com/price?side=BUY&token_id=" <> token_id
+  let req_result = request.to(url) |> result.map_error(fn(_) { "Invalid URL" })
+  use req <- result.try(req_result)
+  
+  case httpc.send(req) {
+     Ok(resp) if resp.status == 200 -> {
+       let decoder = decode.at(["price"], decode.string |> decode.then(fn(s) {
+         case float.parse(s) {
+           Ok(f) -> decode.success(f)
+           Error(_) -> decode.failure(0.0, "Float")
+         }
+       }))
+       json.parse(resp.body, decoder)
+       |> result.map_error(fn(e) { "JSON Decode Error: " <> string.inspect(e) })
+     }
+     Ok(resp) -> Error("API Status: " <> int.to_string(resp.status))
+     Error(_) -> Error("HTTP Request Failed")
+  }
+}
+
+/// Fetch active token IDs from PolyMarket Gamma API.
+pub fn fetch_active_tokens() -> Result(List(String), String) {
+  let url = "https://gamma-api.polymarket.com/markets?active=true&closed=false&enableOrderBook=true&limit=20"
+  let req_result = request.to(url) |> result.map_error(fn(_) { "Invalid URL" })
+  use req <- result.try(req_result)
+  
+  case httpc.send(req) {
+     Ok(resp) if resp.status == 200 -> {
+       let market_decoder = {
+         use enable_ob <- decode.optional_field("enableOrderBook", False, decode.bool)
+         use ids_str <- decode.optional_field("clobTokenIds", "[]", decode.string)
+         
+         case enable_ob {
+           True -> {
+             case json.parse(ids_str, decode.list(decode.string)) {
+                Ok(ids) -> decode.success(ids)
+                Error(_) -> decode.success([])
+             }
+           }
+           False -> decode.success([])
+         }
+       }
+       
+       json.parse(resp.body, decode.list(market_decoder))
+       |> result.map(fn(lists) { 
+         // Take only the first token from each market (usually the 'YES' outcome)
+         list.filter_map(lists, fn(ids) { list.first(ids) })
+         |> list.unique() 
+       })
+       |> result.map_error(fn(e) { 
+         "JSON Decode Error: " <> string.inspect(e) 
+       })
+     }
+     Ok(resp) -> Error("API Status: " <> int.to_string(resp.status))
+     Error(_) -> Error("HTTP Request Failed")
   }
 }
 

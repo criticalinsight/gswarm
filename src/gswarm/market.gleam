@@ -2,6 +2,7 @@ import gleam/io
 import gleam/int
 import gleam/float
 import gleam/list
+import gleam/option.{None}
 import gleam/dict
 import gleam/result
 import gleamdb
@@ -226,8 +227,8 @@ pub fn ingest_tick_with_vector(db: gleamdb.Db, tick: Tick, vector: List(Float)) 
 // --- Schema & Market Creation ---
 
 pub fn configure_tick_retention(db: gleamdb.Db) {
-  let config = fact.AttributeConfig(unique: False, component: False, retention: fact.All)
-  let unique_config = fact.AttributeConfig(unique: True, component: False, retention: fact.All)
+  let config = fact.AttributeConfig(unique: False, component: False, retention: fact.All, cardinality: fact.Many, check: None)
+  let unique_config = fact.AttributeConfig(unique: True, component: False, retention: fact.All, cardinality: fact.Many, check: None)
   
   // Market ID must be unique
   let _ = gleamdb.set_schema(db, "market/id", unique_config)

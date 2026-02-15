@@ -14,18 +14,19 @@ import gswarm/paper_trader
 import gswarm/correlator
 import gswarm/result_fact
 import gswarm/market_feed
-import gswarm/resolution
+
 import gswarm/cross_market
 import gswarm/shard_manager
 import gswarm/ingest_batcher
 import gswarm/pruner
 import gleam/int
-import gleam/result
 import gleam/option.{Some}
-import gswarm/registry_actor
 import gswarm/http
-import gswarm/strategy_selector
-import gleamdb
+import gswarm/leaderboard
+
+import gswarm/activity_feed
+import gswarm/insider_store
+import gswarm/graph_intel
 
 pub fn main() {
   io.println("🐝 Gswarm: Initializing Sharded Sovereign Fabric...")
@@ -55,15 +56,21 @@ pub fn main() {
       // Start Supervision Tree on primary
       let assert Ok(_) = supervisor.start(primary_db)
 
+      // Phase 30: Register market data constraints (v2.0.0)
+      let _ = graph_intel.register_market_constraints(ctx)
+
       // News Feed (Global)
       news_feed.start_news_feed(primary_db)
       correlator.start_correlator(primary_db)
       result_fact.start_result_checker(primary_db)
 
+      // 2. Start Insider Store (Phase 49)
+      let assert Ok(insider_actor) = insider_store.start(primary_db)
+
       // Start Batchers and Pruners for all shards
       let batchers = list.map(dict.to_list(ctx.db.shards), fn(pair) {
         let #(id, db) = pair
-        let assert Ok(batcher) = ingest_batcher.start(db, ctx.registry_actor)
+        let assert Ok(batcher) = ingest_batcher.start(db, ctx.registry_actor, insider_actor)
         // Phase 45: Prune old ticks after 1 hour, check every 30 seconds
         let assert Ok(_) = pruner.start(db, 3_600_000, 30_000, "tick/timestamp")
         #(id, batcher)
@@ -82,80 +89,75 @@ pub fn main() {
       reflex.spawn_market_watcher(btc_db, btc_market_id)
       analyst.start_analyst(btc_db, btc_market_id)
 
-      // Prediction Markets
-      let prediction_market_ids = ["claude-5-released-before-march-31", "will-the-us-strike-iran-by-the-end"]
+      // --- PHASE 50: Advanced Amkabot Integration ---
       
-      list.each(prediction_market_ids, fn(id) {
-        let pm_id = "pm_" <> id
-        let pm_shard_id = shard_manager.get_shard_id(pm_id, shard_count)
-        let assert Ok(pm_db) = dict.get(ctx.db.shards, pm_shard_id)
-        let assert Ok(pm_batcher) = dict.get(batchers, pm_shard_id)
-        
-        io.println("🎲 Tracking " <> pm_id <> " on Shard " <> int.to_string(pm_shard_id))
-        
-        // Note: paper_trader currently single instance per market-set or we shard it too
-        // For now, prediction markets share the same trader if desired or get their own
-        // Let's give them their own or reuse btc_trader if it's "the" trader
-        market_feed.start_market_feed(pm_batcher, [id], Some(btc_trader))
-        reflex.spawn_prediction_watcher(pm_db, pm_id)
-        resolution.start_resolution_checker(pm_db, [id])
-      })
+      // 1. Start Leaderboard Actor (GleamDB Sovereign Fabric 🧙🏾‍♂️)
+      let assert Ok(started) = leaderboard.start(primary_db)
+      let lb_actor = started.data
+      io.println("🏆 Leaderboard Active (GleamDB Sovereign Fabric 🧙🏾‍♂️)")
+
+      // 3. PolyMarket Feed
+      // Dynamically discover active markets to avoid 404s
+      let polymarket_ids = case market_feed.fetch_active_tokens() {
+        Ok(ids) if ids != [] -> ids
+        _ -> {
+          io.println("⚠️ PolyMarket: Discovery failed or empty, using fallback.")
+          ["101676997363687199724245607342877036148401850938023978421879460310389391082353"] // Live token ID
+        }
+      }
+      io.println("🔵 PolyMarket: Discovered " <> int.to_string(list.length(polymarket_ids)) <> " active tokens.")
+      
+      // We pick a shard for the feed (e.g. Shard 0)
+      let assert Ok(pm_batcher) = dict.get(batchers, 0)
+      
+      market_feed.start_polymarket_feed(pm_batcher, polymarket_ids, Some(btc_trader))
+
+      // 4. Activity Feed (Leaderboard)
+      // Discover top traders to track
+      let active_users = case activity_feed.fetch_leaderboard() {
+        Ok(users) -> users
+        Error(e) -> {
+          io.println("⚠️ ActivityFeed: Discovery failed (" <> e <> "), using fallback.")
+          ["0x4bFb41d5B3570DeFd03C39a9A4D8D6D04C96E631"]
+        }
+      }
+      io.println("🕵️ ActivityFeed: Tracking " <> int.to_string(list.length(active_users)) <> " traders.")
+      activity_feed.start_with_dedup(lb_actor, active_users)
+
 
       // Cross-Market Intel (Scatter-Gather across shards)
       let assert Ok(_) = cross_market.start_link(ctx)
       
       // Phase 46: Operability Dashboard
       io.println("📊 Starting Metrics Dashboard on port 8085...")
-      http.start_server(8085, ctx)
+      http.start_server(8085, ctx, lb_actor, insider_actor)
       
       // Phase 44: Probabilistic Metrics Monitor
       process.spawn(fn() {
-        let monitor_freq = 5000 // 5s
-        let card_reply = process.new_subject()
-        let freq_reply = process.new_subject()
-        
-        list.each(list.repeat(Nil, 1000), fn(_) {
-          process.sleep(monitor_freq)
-          process.send(ctx.registry_actor, registry_actor.GetCardinality(card_reply))
-          process.send(ctx.registry_actor, registry_actor.GetFrequency(btc_market_id, freq_reply))
-          
-          let card = process.receive(card_reply, 100) |> result.unwrap(0)
-          let freq = process.receive(freq_reply, 100) |> result.unwrap(0)
-          
-          io.println("🔮 Probabilistic Intel | Unique Markets (HLL): ~" <> int.to_string(card) <> " | BTC Activity (CMS): " <> int.to_string(freq))
-        })
+        loop_flush(lb_actor)
       })
 
-      // Phase 47: Adaptive Strategy Selection Loop
-      process.spawn(fn() {
-        let loop_freq = 10_000 // 10s
-        strategy_loop(primary_db, btc_trader, loop_freq)
-      })
-      
+      // Phase 32: Start periodic Graph Intelligence scans (v2.0.0)
+      graph_intel.start_periodic_scan(ctx, 300_000)
+
       process.sleep_forever()
     }
     Error(e) -> {
-      io.println("❌ Failed to start sharded fabric: " <> e)
+      io.println("❌ Failed to join fabric: " <> e)
     }
   }
 }
 
-fn strategy_loop(db: gleamdb.Db, trader: process.Subject(paper_trader.Message), freq: Int) {
-  process.sleep(freq)
-
-  let #(best_id, best_strat) = strategy_selector.best_strategy(db)
-  
-  // Send update to trader (it handles deduplication if same strategy)
-  process.send(trader, paper_trader.SetStrategy(best_strat, best_id))
-  
-  strategy_loop(db, trader, freq)
+fn loop_flush(lb_actor) {
+  process.sleep(60_000)
+  process.send(lb_actor, leaderboard.Flush)
+  loop_flush(lb_actor)
 }
 
-fn parse_role(s: String) -> node.NodeRole {
-  case s {
+fn parse_role(r: String) -> node.NodeRole {
+  case r {
+    "leader" -> node.Leader
     "follower" -> node.Follower
-    "ephemeral" -> node.LeaderEphemeral
-    "lean" -> node.Lean
     _ -> node.Leader
   }
 }
@@ -164,7 +166,7 @@ fn role_to_string(r: node.NodeRole) -> String {
   case r {
     node.Leader -> "LEADER"
     node.Follower -> "FOLLOWER"
-    node.LeaderEphemeral -> "EPHEMERAL LEADER"
     node.Lean -> "LEAN NODE (RESTRICTED)"
+    node.LeaderEphemeral -> "LEADER (EPHEMERAL)"
   }
 }

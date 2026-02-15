@@ -6,32 +6,27 @@
 
 ---
 
-## Overview
+Phases 20–48 have successfully established a **robust, sharded, and verifiable fabric**. We have real vectors, sharded state, a unified gather engine, and a high-fidelity backtesting suite.
 
-Phases 20–28 built the **foundation**: durable fabric, vector indexing, live data ingestion, Alpha-50 analytics, news correlation, and a reinforcement learning loop. The system *accretes facts*. It does not yet *learn from them*.
-
-This roadmap deepens the intelligence stack in five phases, each de-complecting a specific concern:
+**The Pivot**: Gswarm's mission is now singular—**Extract Alpha from Insiders.** We are moving away from general sentiment analysis and towards **Insider Signal Extraction**, **Competence Verification**, and **$10 Micro-Copytrading**.
 
 | Phase | Name | Core Question |
 |-------|------|---------------|
-| 29 | **Adaptive Strategy Selection** | Which strategy works *right now*? |
-| 30 | **Real Vector Read Path** | Can the Analyst see the actual market state? |
-| 31 | **Volume & Order Flow Intelligence** | What does real volume tell us that price alone cannot? |
-| 32 | **Portfolio Risk Engine** | How much should we risk per signal? |
-| 33 | **Temporal Pattern Memory** | 🔮 PLANNED | Can the system recognize what *time of day* patterns repeat? |
-| 39-44| **Sovereign Fabric** | ✅ DONE | Sharding, Bloom Filters, & Probabilistic Memory |
+| 29-30 | **Adaptive & Read Path** | ✅ DONE |
+| 31 | **Volume & Order Flow Intelligence** | ✅ DONE |
+| 32 | **Portfolio Risk Engine** | ✅ DONE |
+| 33 | **Temporal Pattern Memory** | ✅ DONE |
+| 34-48 | **Fabric & Backtesting** | ✅ DONE |
+| 49 | **Insider Signal Extraction** | 🔮 PLANNED | Identify traders whose buys precede probability spikes. |
+| 50 | **Competence & Stability Verifier**| 🔮 PLANNED | Filter alpha from noise and verify copytrade stability. |
+| 51 | **Micro-Execution Engine ($10)** | 🔮 PLANNED | Execution logic optimized for tiny capital and fees. |
 
 ```mermaid
 graph TD
-    A["Phase 28 ✅ Correlation"] --> B["Phase 29: Adaptive Strategy"]
-    A --> C["Phase 30: Real Vector Read"]
-    B --> D["Phase 32: Portfolio Risk"]
-    C --> E["Phase 31: Volume Intel"]
-    E --> D
-    B --> F["Phase 33: Temporal Memory"]
-    D --> G["🎯 Autonomous Alpha"]
-    H["Phase 39-44: Fabric ✅"] --> B
-    H --> C
+    A["Phase 48 ✅ Backtesting"] --> B["Phase 49: Insider Extraction"]
+    B --> C["Phase 50: Competence Verification"]
+    C --> D["Phase 51: Micro-Execution ($10)"]
+    D --> G["🎯 Stable Micro-Alpha"]
 ```
 
 ---

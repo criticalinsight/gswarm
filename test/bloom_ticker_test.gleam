@@ -9,6 +9,7 @@ import gswarm/sharded_query
 import gswarm/ingest_batcher
 import gswarm/shard_manager
 import gswarm/registry_actor
+import gswarm/insider_store
 import gleamdb/shared/types.{Positive, Val, Var}
 import gleamdb/fact
 import gleamdb
@@ -16,9 +17,10 @@ pub fn bloom_integration_test() {
   // 1. Setup Sharded Context with 2 shards
   let assert Ok(ctx) = fabric.join_sharded_fabric(node.Leader, "test_bloom_shards", 2)
   
-  // 2. Start Batchers
-  let assert Ok(batcher0) = ingest_batcher.start(get_shard(ctx, 0), ctx.registry_actor)
-  let assert Ok(batcher1) = ingest_batcher.start(get_shard(ctx, 1), ctx.registry_actor)
+  // 2. Start Batchers (passing insider_actor required for Phase 49)
+  let assert Ok(insider_actor) = insider_store.start(get_shard(ctx, 0))
+  let assert Ok(batcher0) = ingest_batcher.start(get_shard(ctx, 0), ctx.registry_actor, insider_actor)
+  let assert Ok(batcher1) = ingest_batcher.start(get_shard(ctx, 1), ctx.registry_actor, insider_actor)
   
   let m1 = "market_test_1"
   let _ = market.create_prediction_market(get_shard(ctx, shard_manager.get_shard_id(m1, 2)), market.Market(

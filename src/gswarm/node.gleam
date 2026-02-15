@@ -1,5 +1,5 @@
 import gleam/otp/actor
-import gleam/option.{Some}
+import gleam/option.{Some, None}
 import gleam/string
 import gleam/dict
 import gleam/erlang/process
@@ -41,7 +41,7 @@ pub fn get_primary(ctx: ShardedContext) -> gleamdb.Db {
 
 pub fn start_sharded(role: NodeRole, cluster_id: String, shard_count: Int) -> Result(ShardedContext, String) {
   case role {
-    Leader | Lean -> {
+    Leader -> {
       case sharded.start_sharded(cluster_id, shard_count, Some(mnesia.adapter())) {
         Ok(db) -> {
           let registry = shard_manager.new_registry(shard_count)
@@ -49,6 +49,17 @@ pub fn start_sharded(role: NodeRole, cluster_id: String, shard_count: Int) -> Re
           Ok(ShardedContext(role, db, cluster_id, registry, actor))
         }
         Error(e) -> Error("Failed to start sharded leader: " <> e)
+      }
+    }
+    Lean -> {
+       // Phase 41: Local sharding for Lean mode (Ephemeral/RAM-only for speed/dev)
+       case sharded.start_local_sharded(cluster_id, shard_count, None) {
+        Ok(db) -> {
+          let registry = shard_manager.new_registry(shard_count)
+          let assert Ok(actor) = registry_actor.start(shard_count)
+          Ok(ShardedContext(role, db, cluster_id, registry, actor))
+        }
+        Error(e) -> Error("Failed to start lean sharded leader: " <> e)
       }
     }
     _ -> Error("Follower/Ephemeral sharding not fully implemented in start_sharded")

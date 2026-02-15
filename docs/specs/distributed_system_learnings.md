@@ -38,9 +38,10 @@ case raw_estimate <=. 2.5 *. m {
 1.  **Ordered Shutdown**: Unregister explicitly *before* killing the process.
 2.  **Unique Test Names**: Use unique cluster IDs for every test run (e.g., `test_bloom_shards` vs `test_shards_1`).
 
-## 4. Build Stability vs. Deprecations
+## 4. Build Stability vs. Deprecations ✅ RESOLVED
 
 **Problem**: `list.range` is deprecated in favor of `int.range`.
 **Context**: Bulk replacing logic caused build failures due to arity mismatches and missing imports in the current environment.
-**Decision**: We prioritized a **passing build** and **green tests** over zero warnings.
-**Takeaway**: Refactoring core standard library usage should be treated as a major migration, not a quick cleanup, especially when it touches every module in the system.
+**Original Decision**: We prioritized a **passing build** and **green tests** over zero warnings.
+**Resolution**: All `list.range` calls in GleamDB have been migrated to `int.range` reducer pattern. Key insight: `int.range` is **exclusive** on the upper bound (`list.range(1, 10)` → `int.range(from: 1, to: 11, ...)`). GleamDB now builds with zero deprecation warnings.
+**Takeaway**: Refactoring core standard library usage should be treated as a major migration, not a quick cleanup—but it must eventually be done to avoid accumulating debt.

@@ -80,7 +80,7 @@ sequenceDiagram
 
 ## 6. Pre-Mortem: "Why will this fail?"
 - **The "Disk Wall"**: Moving from ETS to Disk will drop throughput. 
-  - *Mitigation*: Implementation of **Batch Transacting**—group 100 ticks into one disk commit.
+  - *Mitigation*: **Batch Transacting**—group 100 ticks into one disk commit. GleamDB now supports tunable `Config(parallel_threshold, batch_size)` via `gleamdb.set_config` — adjust batch and parallelism settings per shard workload.
 - **Split Brain**: Two followers promoting themselves.
   - *Mitigation*: Explicit Paxos/Raft consensus for Leader election in `fabric.gleam`.
 
@@ -99,7 +99,10 @@ sequenceDiagram
 | 45 | **Stream Pruning**      | ✅ DONE | Shard Collapsing & Active Paging |
 | 46 | **Operability Dashboard** | ✅ DONE | HTTP Metrics, HLL/Bloom Visualization |
 | 47 | **Adaptive Strategy**     | ✅ DONE | Hot-swapping strategies based on win-rate |
-| 48 | **High-Fidelity Backtest**| 🔮 PLANNED | Risk-aware, Adaptive, & Paginated Replay |
+| 48 | **High-Fidelity Backtest**| ✅ DONE | Risk-aware, Adaptive, & Paginated Replay |
+| 49 | **Sentiment NLP**         | 🔮 PLANNED | Heuristic keyword-based sentiment facts |
+| 50 | **Distributed V-Link**    | 🔮 PLANNED | Global similarity search across shards |
+| 51 | **Self-Correction Loop**  | 🔮 PLANNED | Calibration-aware signal gating |
 
 ---
 

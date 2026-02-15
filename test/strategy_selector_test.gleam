@@ -16,8 +16,8 @@ pub fn selector_logic_test() {
   let assert Ok(db) = gleamdb.start_distributed(cluster_id, None)
 
   // Define Schema
-  let unique_config = fact.AttributeConfig(unique: True, component: False, retention: fact.All)
-  let normal_config = fact.AttributeConfig(unique: False, component: False, retention: fact.All)
+  let unique_config = fact.AttributeConfig(unique: True, component: False, retention: fact.All, cardinality: fact.Many, check: None)
+  let normal_config = fact.AttributeConfig(unique: False, component: False, retention: fact.All, cardinality: fact.Many, check: None)
   
   let _ = gleamdb.set_schema(db, "prediction/id", unique_config)
   let _ = gleamdb.set_schema(db, "prediction/strategy", normal_config)

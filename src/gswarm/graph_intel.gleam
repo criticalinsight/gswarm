@@ -14,12 +14,15 @@ import gleam/float
 import gleam/list
 import gleam/dict
 import gleam/result
-
+import gleam/option.{None}
+import gleam/erlang/process
 import gleamdb
 import gleamdb/fact
 import gleamdb/shared/types
 import gleamdb/q
+import gleamdb/engine
 
+import gswarm/market
 import gswarm/node.{type ShardedContext}
 
 
@@ -32,6 +35,16 @@ import gswarm/node.{type ShardedContext}
 pub fn register_market_constraints(ctx: ShardedContext) -> Result(Nil, String) {
   let db = node.get_primary(ctx)
   
+  // Ensure base market schema is configured
+  market.configure_tick_retention(db)
+  
+  // Configure graph and intelligence attributes
+  let config = fact.AttributeConfig(unique: False, component: False, retention: fact.All, cardinality: fact.Many, check: None)
+  let _ = gleamdb.set_schema(db, "trades_with", config)
+  let _ = gleamdb.set_schema(db, "insider/confidence", config)
+  let _ = gleamdb.set_schema(db, "market/influences", config)
+  let _ = gleamdb.set_schema(db, "market/name", config)
+
   // Enforce: Only one tick per (market, timestamp) pair
   let _ = gleamdb.register_composite(db, ["tick/market_id", "tick/timestamp"])
   
@@ -39,6 +52,10 @@ pub fn register_market_constraints(ctx: ShardedContext) -> Result(Nil, String) {
   let _ = gleamdb.register_composite(db, ["prediction/market_id", "prediction/timestamp"])
   
   io.println("🔒 Composites: market tick + prediction uniqueness registered")
+  
+  // Seed graph data so scans have something to find (dogfooding)
+  seed_graph_data(ctx)
+  
   Ok(Nil)
 }
 
@@ -70,13 +87,15 @@ pub fn simulate_trade(
   
   case gleamdb.with_facts(state, spec_facts) {
     Ok(speculative_state) -> {
-      // Query the speculative state for insider confidence
-      // PageRank in the speculative world — does this trade increase influence?
+      // CORRECT DX: Query the speculative state (pure value) using engine.run
+      // In learnings.md I noted this mismatch — here I solve it.
       let query = q.new()
         |> q.pagerank("node", "trades_with", "rank")
         |> q.to_clauses()
+
+      let spec_results = engine.run(speculative_state, query, [], None, None)
       
-      let _spec_results = gleamdb.query(db, query)
+      let _ = spec_results
       
       io.println("🔮 Speculative: Simulated " <> direction <> " $" 
         <> float.to_string(amount) <> " on " <> market_id 
@@ -161,12 +180,19 @@ pub fn explain_complex_query() -> String {
 
 /// Compute cross-market aggregate statistics using push-down predicates.
 pub fn market_aggregate_stats(db: gleamdb.Db) -> types.QueryResult {
+  // 1. Direct verify facts
+  let direct_query = [types.Positive(#(types.Var("e"), "tick/probability", types.Var("v")))]
+  let direct_res = gleamdb.query(db, direct_query)
+  let count = list.length(direct_res)
+  io.println("🛰️  DEBUG: Direct tick/probability count = " <> int.to_string(count))
+
+  // 2. Simplified Aggregate Query (Phase 31)
   let avg_query = q.new()
-    |> q.avg("avg_price", "price", [
-      types.Positive(#(types.Var("t"), "tick/price", types.Var("price")))
-    ])
     |> q.count("total_ticks", "t", [
-      types.Positive(#(types.Var("t"), "tick/price", types.Var("_p")))
+      types.Positive(#(types.Var("t"), "tick/probability", types.Var("_p")))
+    ])
+    |> q.avg("avg_prob", "prob", [
+      types.Positive(#(types.Var("t"), "tick/probability", types.Var("prob")))
     ])
     |> q.to_clauses()
   
@@ -174,12 +200,19 @@ pub fn market_aggregate_stats(db: gleamdb.Db) -> types.QueryResult {
   
   case list.first(results) {
     Ok(row) -> {
-      let avg = dict.get(row, "avg_price") |> result.unwrap(fact.Float(0.0))
+      let avg = dict.get(row, "avg_prob") |> result.unwrap(fact.Float(0.0))
       let count = dict.get(row, "total_ticks") |> result.unwrap(fact.Int(0))
-      io.println("📊 Aggregates: Avg Price=" <> val_to_string(avg) 
+      io.println("📊 Aggregates: Avg Prob=" <> val_to_string(avg) 
         <> " | Total Ticks=" <> val_to_string(count))
     }
-    _ -> io.println("📊 Aggregates: No data")
+    _ -> {
+       io.println("📊 Aggregates: No data returned from query")
+       // If query returns empty but facts exist, the engine has a Phase 31 bug
+       case count > 0 {
+         True -> io.println("⚠️  ENGINE BUG: Facts exist but aggregates returned empty!")
+         False -> io.println("ℹ️  No facts inhaled yet.")
+       }
+    }
   }
   
   results
@@ -191,6 +224,11 @@ pub fn market_aggregate_stats(db: gleamdb.Db) -> types.QueryResult {
 
 /// Detect wash-trading rings: cycles in the "trades_with" graph.
 pub fn detect_wash_trades(db: gleamdb.Db) -> types.QueryResult {
+  // Direct verify graph facts
+  let debug_query = [types.Positive(#(types.Var("e"), "trades_with", types.Var("v")))]
+  let debug_res = gleamdb.query(db, debug_query)
+  io.println("🛰️  DEBUG: trades_with count = " <> int.to_string(list.length(debug_res)))
+
   let query = q.new()
     |> q.cycle_detect("trades_with", "cycle")
     |> q.to_clauses()
@@ -255,7 +293,7 @@ pub fn insider_influence_map(db: gleamdb.Db, trader_id: String) -> types.QueryRe
 /// Order market dependencies using topological sort.
 pub fn market_dependency_order(db: gleamdb.Db) -> types.QueryResult {
   let query = q.new()
-    |> q.topological_sort("influences", "market", "order")
+    |> q.topological_sort("market/influences", "market", "order")
     |> q.order_by("order", types.Asc)
     |> q.to_clauses()
   
@@ -294,6 +332,59 @@ pub fn full_intelligence_scan(ctx: ShardedContext) -> Nil {
   
   io.println("━━━━━ Scan Complete ━━━━━\n")
   Nil
+}
+
+/// Start a periodic intelligence scan.
+pub fn start_periodic_scan(ctx: ShardedContext, interval_ms: Int) {
+  process.spawn_unlinked(fn() {
+    scan_loop(ctx, interval_ms)
+  })
+}
+
+fn scan_loop(ctx: ShardedContext, interval_ms: Int) {
+  // 10s grace period for live feeds and seeding to settle
+  process.sleep(10000)
+  full_intelligence_scan(ctx)
+  process.sleep(interval_ms)
+  scan_loop(ctx, interval_ms)
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Seed Data for v2.0.0 Scans
+// ─────────────────────────────────────────────────────────────────
+
+pub fn seed_graph_data(ctx: ShardedContext) {
+  // Cycle: A -> B -> C -> A
+  let trader_a = fact.deterministic_uid("trader_a")
+  let trader_b = fact.deterministic_uid("trader_b")
+  let trader_c = fact.deterministic_uid("trader_c")
+  let trader_d = fact.deterministic_uid("trader_d")
+  
+  let facts = [
+    #(trader_a, "trades_with", fact.Ref(fact.EntityId(shard_key("trader_b")))),
+    #(trader_b, "trades_with", fact.Ref(fact.EntityId(shard_key("trader_c")))),
+    #(trader_c, "trades_with", fact.Ref(fact.EntityId(shard_key("trader_a")))),
+    
+    // Gatekeeper: D -> A (D is outside the cycle but connected)
+    #(trader_d, "trades_with", fact.Ref(fact.EntityId(shard_key("trader_a")))),
+    
+    // Insider Scores
+    #(trader_a, "insider/confidence", fact.Float(0.85)),
+    #(trader_b, "insider/confidence", fact.Float(0.45)),
+    
+    // Market Dependencies (for topo_sort)
+    #(fact.deterministic_uid("m_btc"), "market/influences", fact.Ref(fact.EntityId(shard_key("m_eth")))),
+    #(fact.deterministic_uid("m_eth"), "market/influences", fact.Ref(fact.EntityId(shard_key("m_sol")))),
+    
+    // Market Metadata for join testing
+    #(fact.deterministic_uid("m_btc"), "market/name", fact.Str("Bitcoin")),
+    #(fact.deterministic_uid("m_eth"), "market/name", fact.Str("Ethereum")),
+    #(fact.deterministic_uid("m_sol"), "market/name", fact.Str("Solana"))
+  ]
+  
+  let db = node.get_primary(ctx)
+  let _ = gleamdb.transact(db, facts)
+  io.println("🎲 Seeding v2.0.0 graph data for dogfooding scans...")
 }
 
 // ─────────────────────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 import gleam/io
-import gleam/option.{Some}
 import gleam/int
+import gleam/option.{None, Some}
 import gleeunit/should
 import gleamdb
 import gleamdb/storage/mnesia
@@ -30,8 +30,8 @@ pub fn switching_logic_test() {
   }
   
   // 2. Define Schema to ensure indexing/querying works
-  let unique_config = fact.AttributeConfig(unique: True, component: False, retention: fact.All)
-  let normal_config = fact.AttributeConfig(unique: False, component: False, retention: fact.All)
+  let unique_config = fact.AttributeConfig(unique: True, component: False, retention: fact.All, cardinality: fact.Many, check: None)
+  let normal_config = fact.AttributeConfig(unique: False, component: False, retention: fact.All, cardinality: fact.Many, check: None)
   
   let _ = gleamdb.set_schema(db, "prediction/id", unique_config)
   let _ = gleamdb.set_schema(db, "prediction/strategy", normal_config)

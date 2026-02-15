@@ -1,5 +1,6 @@
 import gleam/erlang/process
 import gleam/list
+import gleam/option.{None}
 import gleeunit/should
 import gleamdb
 import gleamdb/fact
@@ -9,7 +10,7 @@ pub fn stream_pruning_test() {
   let db = gleamdb.new()
   
   // 1. Configure schema
-  let config = fact.AttributeConfig(unique: False, component: False, retention: fact.All)
+  let config = fact.AttributeConfig(unique: False, component: False, retention: fact.All, cardinality: fact.Many, check: None)
   let _ = gleamdb.set_schema(db, "test/ts", config)
   let _ = gleamdb.set_schema(db, "test/val", config)
   

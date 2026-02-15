@@ -1,6 +1,6 @@
 # Getting Started with Gswarm 🐝
 
-Follow these steps to initialize the sovereign fabric and run the trading simulation.
+Follow these steps to initialize the sovereign fabric and run the alpha extraction engine.
 
 ## 🛠️ Prerequisites
 - **Erlang/OTP 27**: Required for the Silicon Saturation (ETS) layer.
@@ -29,12 +29,18 @@ Follow these steps to initialize the sovereign fabric and run the trading simula
    ```
 
 ## 🧪 What to Expect
-Upon running, the swarm will:
+Upon running, the alpha engine will:
 1.  **Initialize**: Join the sharded fabric and boot the **Supervision Tree**.
 2.  **Ingestion**: Start the `market_feed` (Manifold) and `live_ticker` (Coinbase) loops.
-3.  **Probabilistic Tracking**: Logs will show unique market cardinality (HLL) and signal frequency (CMS).
-4.  **Intelligence Dashboard**: Visit `http://localhost:8080/metrics` to see the live operability state.
-5.  **Adaptive Trading**: The `strategy_selector` will hot-swap trader strategies based on rolling win-rates.
+3.  **Insider Detection**: Logs will show "Lead-Time Lag" calculations for active traders.
+4.  **Intelligence Dashboard**: Visit `http://localhost:8085/` to see the live metrics and Insider Leaderboard.
+5.  **Micro-Execution**: The `copytrader` will execute simulated $10 trades when high-confidence insiders move.
+
+## ⚙️ Tuning Parallelism
+For high-throughput workloads, tune GleamDB's parallelism settings in your startup code:
+```gleam
+gleamdb.set_config(db, types.Config(parallel_threshold: 200, batch_size: 50))
+```
 
 ## 📖 Further Reading
 - [Architecture](docs/architecture.md): Deep dive into the Rama Pattern and actor model.

@@ -41,7 +41,9 @@ pub fn metrics_test() {
   // 2. Start Server
   // We need to run it on a distinct port to avoid collision with main app if running?
   // Use 8081 for test.
-  http.start_server(8081, ctx)
+  let lb_actor = process.new_subject() // Dummy subject
+  let insider_actor = process.new_subject() // Dummy subject
+  http.start_server(8081, ctx, lb_actor, insider_actor)
   process.sleep(100)
   
   // 3. Request Metrics

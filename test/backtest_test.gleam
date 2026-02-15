@@ -2,7 +2,7 @@ import gleam/io
 import gleam/list
 import gleam/int
 import gleam/float
-import gleam/option.{Some}
+import gleam/option.{None, Some}
 import gleam/erlang/process
 import gleamdb
 import gleamdb/fact
@@ -29,8 +29,8 @@ pub fn adaptive_backtest_test() {
   }
 
   // Define Schema
-  let unique = fact.AttributeConfig(unique: True, component: False, retention: fact.All)
-  let normal = fact.AttributeConfig(unique: False, component: False, retention: fact.All)
+  let unique = fact.AttributeConfig(unique: True, component: False, retention: fact.All, cardinality: fact.Many, check: None)
+  let normal = fact.AttributeConfig(unique: False, component: False, retention: fact.All, cardinality: fact.Many, check: None)
   let _ = gleamdb.set_schema(db, "market/id", unique)
   let _ = gleamdb.set_schema(db, "tick/market", normal)
   let _ = gleamdb.set_schema(db, "tick/price/Yes", normal)
