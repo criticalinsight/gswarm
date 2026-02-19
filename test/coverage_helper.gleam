@@ -45,7 +45,7 @@ pub fn report(results: List(CoverageResult)) {
     }
     
     io.println(
-      color <> " " <> string.pad_end(res.module, to: 30, with: " ") 
+      color <> " " <> string.pad_end(res.module, to: 25, with: " ") 
       <> " | " <> float.to_string(pct) <> "% (" 
       <> int.to_string(res.covered) <> "/" <> int.to_string(subtotal) <> " lines)"
     )

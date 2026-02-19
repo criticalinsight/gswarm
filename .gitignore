@@ -1,4 +1,14 @@
+/gleamdb
+# Gleam build artifacts
+build/
 *.beam
-*.ez
-/build
 erl_crash.dump
+
+# Sly Agent Data
+.sly/
+.env
+Mnesia.*/
+*.log
+*.DCD
+*.DAT
+*.LOG

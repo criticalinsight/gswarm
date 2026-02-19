@@ -1,52 +1,65 @@
-# Learnings: Prediction Markets Integration (Phase 34–38)
+# GleamDB: Prediction Markets Learnings & Requirements
 
-> "To predict is to structure time." — Rich Hickey (Paraphrased)
+**Date**: 2026-02-13
+**Source**: Gswarm Prediction Markets Implementation (Phases 34-38)
+**Status**: DRAFT
 
-## 1. The Shift to Probability Space
-Integrating Manifold Markets forced a fundamental shift in our data model.
-- **Crypto**: Infinite, unbounded price (`Float`).
-- **Prediction**: Bounded probability (`0.0` to `1.0`).
+## Executive Summary
+Building prediction markets intelligence on GleamDB surfaced critical friction points in time-series handling, aggregation, and query expressiveness. To support financial/probability analytics natively, GleamDB requires the following enhancements.
 
-**Insight**: Normalizing everything to a vector space (`[0, 1]`) makes the *Analyst* agnostic. Whether it's "BTC Price" or "AI Turing Test Probability", the math (Cosine Similarity) remains the same. The `PredictionTick` type enforces this bound at the ingestion edge.
+## 1. Temporal Query Primitives
+**Problem**: `get_probability_series` had to pull ALL matching facts and filter in Gleam. No "last N values ordered by timestamp" primitive.
+**Requirement**:
+- **TemporalRange**: Query clause `TemporalRange(attr, since, until)` returning facts ordered by transaction time.
+- **Limit/Offset**: Essential for pagination and "last N" queries.
 
-## 2. Entity-per-Tick vs. EAVT Flatness
-We initially tried to model ticks as attributes on the Market entity (`tick/price` on `Market`).
-- **Problem**: Cartesian product explosions during queries. Querying `tick/price` and `tick/timestamp` caused the Datalog engine to return every combination of price and timestamp (~N²).
-- **Solution (Phase 23)**: **Entity-per-Tick**.
-    - Every tick is a unique `Entity`.
-    - It has a deterministic ID: `hash(market_id, timestamp, outcome)`.
-    - It links back to the market: `tick/market -> MarketRef`.
+## 2. Server-Side Aggregation
+**Problem**: `resolution.gleam` computed average Brier scores by querying all predictions, extracting floats, and folding manually.
+**Requirement**:
+- **Aggregate**: Query clause `Aggregate(attr, :avg | :sum | :count | :min | :max)`.
+- **GroupBy**: Optional grouping by a secondary attribute.
 
-**Result**: Queries become efficient scans over Tick entities, sorted by time. The "Shape" of the data matches the "Shape" of the query.
+## 3. Query Ergonomics (Lookup Shorthand)
+**Problem**: Every ingestion function repeats `fact.Lookup(#("market/id", fact.Str(id)))` multiple times, creating noise.
+**Requirement**:
+- **WithEntity**: Helper to bind lookup once per transaction or query builder.
+  ```gleam
+  // Proposed syntax
+  use entity <- gleamdb.with_entity("market/id", id)
+  entity.put("tick/price", price)
+  ```
 
-## 3. Determinisic IDs (Idempotency)
-Distributed systems struggle with "exactly-once" delivery.
-- **Problem**: If the `LiveTicker` crashes and restarts, it might re-ingest the same tick. With random IDs, we'd get duplicates.
-- **Solution**: `phash2` FFI.
-    - ID = `hash(MarketID + Timestamp + Outcome)`
-    - If we ingest the same tick twice, it maps to the *same* Entity ID.
-    - result: **Idempotent Upserts**. The second write just "confirms" the existing fact.
+## 4. Flexible Retention Policies
+**Problem**: `configure_tick_retention` hard-codes each attribute name ("tick/price/Yes", "tick/probability/YES").
+**Requirement**:
+- **Wildcard/Prefix Support**: Ability to define retention policies for `tick/*` or regex-based patterns.
 
-## 4. Vector Sovereignty in Practice
-We deployed the **Analyst** to watch `pm_will-ai-pass-the-turing-test`.
-- It identified a correlation with `pm_gpt-5-release-date`.
-- **Mechanism**: The `latest_vector` attribute.
-    - Ingestor writes `tick/vector` (immutable history).
-    - Ingestor *also* updates `market/latest_vector` (current context).
-    - Analyst queries `market/latest_vector` to find similar markets instantly (O(log n)).
+## 5. Schema Validation Constraints
+**Problem**: `validate_prediction_tick` manually checks probability ∈ [0.0, 1.0] before transaction.
+**Requirement**:
+- **Attribute Constraints**:
+  - `FloatRange(min, max)`
+  - `StringEnum(values)`
+  - `Regex(pattern)`
 
-## 5. The "Feedback Loop" Gap
-We realized the **Paper Trader** was trading blindly.
-- It generated signals but never learned.
-- **Fix**: **Result Facts** (`result_fact.gleam`).
-    - We now record every prediction.
-    - We wait (Resolution or Time Delay).
-    - We assert a `Result` fact (Correct/Incorrect).
-    - The `StrategySelector` queries these Results to hot-swap logic.
+## 6. Top-K Similarity Search
+**Problem**: `analyst.gleam` retrieves ALL vectors above a threshold, even if only the top 5 are needed.
+**Requirement**:
+- **SimilarityTopK**: Query clause `SimilarityTopK(attr, target_vector, k)` to optimize vector search.
 
-**Conclusion**: The system now *closes the loop*. It is no longer just a feed reader; it is a learning organism.
+## 7. Ordered Results
+**Problem**: Query results return in arbitrary order, complicating time-series correlation.
+**Requirement**:
+- **OrderBy**: Query clause `OrderBy(attr, :asc | :desc)`.
 
-## 6. Bitemporal and Speculative Learnings (v2.0)
-Integrating **Speculative Soul** and **Chronos** solved the "Simulation Credibility" problem.
-- **Speculative Trading**: Using `with_facts` allowed the Paper Trader to simulate bets and calculate virtual Brier scores *before* resolution without side effects on persistent storage.
-- **Historical Precision**: `as_of_valid` enabled replaying political markets with exact temporal sequence, preventing the "look-ahead" leakage where a poll result from 2pm is used to predict a market move at 1pm.
+## Impact Analysis
+Implementing #1 (Temporal) and #6 (Top-K) would eliminate ~40% of the data-handling boilerplate in the Gswarm Analyst and Resolution modules.
+## 8. Probabilistic Monitoring & Load Management
+**Problem**: In high-throughput sharded environments, tracking the activity of every single market exactly is CPU/RAM intensive.
+**Requirement**:
+- **Bloom Filter Integration**: Native support in the query planner for shard pruning. (Phase 43).
+- **Probabilistic Metrics**: Count-Min Sketch for frequency and HyperLogLog for cardinality should be first-class citizens in the Database Registry or Actor layer. (Phase 44).
+- **Adaptive Batching**: The database should provide feedback on disk latency to the ingestors to adjust batch sizes dynamically.
+
+## 9. Arity-Stability in Core APIs
+**Observation**: Frequent compiler updates (like the `int.range` transition) can break core logic in sharded environments. GleamDB should prioritize stable, consistent APIs for ranges and folds to prevent build breakage during high-load phases.

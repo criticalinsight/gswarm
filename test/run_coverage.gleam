@@ -33,15 +33,16 @@ fn gleam_to_erlang_module_name(path: String) -> String {
 }
 
 pub fn main() {
-  io.println("🚀 Starting Coverage Analysis for Gswarm...")
+  io.println("🚀 Starting Coverage Analysis...")
   coverage_helper.start()
   
-  let ebin = "build/dev/erlang/gswarm/ebin"
+  let ebin = "build/dev/erlang/gleamdb/ebin"
   
   case coverage_helper.compile(ebin) {
     Ok(modules) -> {
       io.println("✅ Instrumented " <> int.to_string(list.length(modules)) <> " modules.")
       
+      // Run tests (re-implementing gleeunit without halt)
       let options = [Verbose, NoTty, Report(#(GleeunitProgress, [Colored(True)])), ScaleTimeouts(10)]
       let modules_to_test = 
         find_files(matching: "**/*.{erl,gleam}", in: "test")
@@ -50,6 +51,7 @@ pub fn main() {
       
       let _ = run_eunit(modules_to_test, options)
       
+      // Analyze and Report
       let results = coverage_helper.analyze(modules)
       coverage_helper.report(results)
     }
