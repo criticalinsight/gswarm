@@ -489,7 +489,7 @@ fn handle_message(state: types.DbState, msg: Message) -> actor.Next(types.DbStat
       // Predictive Prefetching
       case state.config.prefetch_enabled {
         True -> {
-          let hot_attrs = prefetch.analyze_history(state.query_history)
+          let _hot_attrs = prefetch.analyze_history(state.query_history)
           case state.ets_name {
             Some(_name) -> {
                // In a fully flushed out system, we would query the StorageAdapter or Mnesia 

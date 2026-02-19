@@ -1,5 +1,5 @@
 import gleeunit/should
-import gleam/option.{Some, None}
+import gleam/option.{None}
 import gleam/list
 import gleam/int
 import gleamdb
@@ -7,7 +7,6 @@ import gleamdb/fact
 import gleamdb/shared/types
 import gleamdb/q
 import gleam/erlang/process
-import gleam/io
 
 pub fn disk_spilling_test() {
   // 1. Initialize DB with small memory limit to force spilling
@@ -31,7 +30,8 @@ pub fn disk_spilling_test() {
   // 3. Ingest Data (Batches to trigger lifecycle eviction)
   // Let's transact 3 separate batches to ensure `Tick` triggers eviction of older tx.
   let ingest_batch = fn(start, end) {
-    let data = list.range(start, end)
+    let data = list.repeat(0, end - start + 1)
+      |> list.index_map(fn(_, i) { i + start })
       |> list.map(fn(i) {
         #(fact.deterministic_uid(i), "log/entry", fact.Str("log_" <> int.to_string(i)))
       })

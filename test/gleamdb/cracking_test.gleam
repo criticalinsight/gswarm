@@ -1,8 +1,8 @@
-import gleam/option.{None, Some}
+import gleam/option.{None}
 import gleamdb
-import gleamdb/fact.{type AttributeConfig, Int, Columnar, Row, All, One}
+import gleamdb/fact.{Int, Columnar, All, One}
 import gleamdb/q
-import gleamdb/shared/types.{type BodyClause, Positive, Var, Val}
+import gleamdb/shared/types.{Var, Val}
 
 pub fn cracking_test() {
   let db = gleamdb.new()

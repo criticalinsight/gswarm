@@ -4,7 +4,6 @@ import gleam/list
 import gleam/string
 import gleamdb
 import gleamdb/fact
-import gleamdb/engine
 import gleamdb/shared/types.{Out, Attr, PullMap}
 
 pub fn pulse_market(db: gleamdb.Db, market_id: String) {

@@ -8,7 +8,8 @@ pub fn jit_lite_complex_filter_test() {
   let db = gleamdb.new()
 
   // Ingest data
-  let data = list.range(1, 100)
+  let data = list.repeat(0, 100)
+    |> list.index_map(fn(_, i) { i + 1 })
     |> list.flat_map(fn(i) {
       let eid = fact.deterministic_uid(i)
       [

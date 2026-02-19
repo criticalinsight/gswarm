@@ -2,8 +2,7 @@ import gleeunit/should
 import gleamdb
 import gleamdb/fact
 import gleamdb/q
-import gleamdb/shared/types
-import gleam/option.{None, Some}
+import gleam/option.{None}
 import gleam/list
 import gleam/dict
 

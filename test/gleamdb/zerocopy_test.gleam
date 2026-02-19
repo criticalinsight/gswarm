@@ -1,6 +1,5 @@
 import gleeunit/should
-import gleam/option.{None, Some}
-import gleam/list
+import gleam/option.{None}
 import gleamdb
 import gleamdb/fact
 import gleamdb/shared/types

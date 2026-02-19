@@ -1,8 +1,8 @@
-import gleam/dict.{type Dict}
+import gleam/dict
 import gleam/list
 import gleam/result
 import gleam/int
-import gleamdb/shared/types.{type QueryContext, QueryContext}
+import gleamdb/shared/types.{type QueryContext}
 
 /// Analyzes the recent query history to identify the most heavily 
 /// requested attributes that might benefit from predictive prefetching.

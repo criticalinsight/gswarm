@@ -1,5 +1,5 @@
 import gleamdb/fact.{type Datom}
-import gleamdb/storage.{StorageAdapter}
+import gleamdb/storage
 
 @external(erlang, "gleamdb_mnesia_ffi", "init")
 pub fn init_mnesia() -> Nil

@@ -15,7 +15,6 @@ import gleamdb/shared/types
 import gleamdb/index
 import gleamdb/algo/graph
 import gleamdb/algo/aggregate
-import gleamdb/index/ets
 import gleamdb/index/ets as ets_index
 import gleam/erlang/process
 import gleamdb/algo/vectorized

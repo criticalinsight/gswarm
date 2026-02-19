@@ -1,5 +1,5 @@
 import gleeunit/should
-import gleam/option.{None, Some}
+import gleam/option.{None}
 import gleam/list
 import gleam/erlang/process
 import gleamdb

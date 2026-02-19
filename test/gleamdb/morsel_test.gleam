@@ -1,6 +1,5 @@
 import gleeunit/should
 import gleam/list
-import gleam/int
 import gleamdb
 import gleamdb/fact
 import gleamdb/q
@@ -10,7 +9,8 @@ pub fn expected_morsel_test() {
   let db = gleamdb.new()
   
   // 2. Ingest Dataset
-  let data = list.range(1, 250)
+  let data = list.repeat(0, 250)
+    |> list.index_map(fn(_, i) { i + 1 })
     |> list.flat_map(fn(i) {
       let eid = fact.deterministic_uid(i)
       [#(eid, "item/type", fact.Str("parallel_item"))]

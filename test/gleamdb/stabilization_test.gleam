@@ -19,7 +19,7 @@ pub fn ordered_sequence_test() {
     #(fact.Uid(fact.EntityId(1)), "order", fact.Int(3)),
   ]
   
-  let assert Ok(state) = gleamdb.transact(db, facts)
+  let assert Ok(_state) = gleamdb.transact(db, facts)
   
   // Verify tx_index is assigned correctly
   let history = gleamdb.history(db, fact.Uid(fact.EntityId(1)))
