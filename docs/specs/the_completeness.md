@@ -127,5 +127,24 @@ sequence_diagram
 - [x] WHEN I use **Exhaustive Projections** with Sum Types
 - [x] THEN the compiler guarantees that every post state (Draft, Published, Archived) is handled in the SSG.
 
+## Phase 61: v2.4.0 Release Learnings (v2.4.0)
+- [x] GIVEN a consumer using `gleamdb.traverse`
+- [x] WHEN they need to convert between `fact.Eid` and `Int`
+- [x] THEN `gleamdb.resolve_eid(db, eid)` provides the bridge.
+- [x] GIVEN a consumer needing `TraversalStep` constructors
+- [x] WHEN they use `gleamdb.out()` and `gleamdb.step_in()`
+- [x] THEN they avoid importing internal `shared/types` module.
+
+## Phase 62: Vendor Sync & Child Project Modernization (v2.4.0)
+- [x] GIVEN canonical GleamDB v2.4.0 source
+- [x] WHEN I rsync to `gswarm/src/gleamdb/`, `gclaw/src/gleamdb/`
+- [x] THEN all consumer code is updated to match new types (AttributeConfig 9-field, PullResult constructors, QueryResult arity).
+- [x] GIVEN deprecated APIs (storage/disk, transactor.create_bm25_index, register_index_adapter)
+- [x] WHEN I remove them from child projects
+- [x] THEN the projects build with 0 warnings, 0 errors.
+- [x] GIVEN GleamCMS with `cms.post/related_posts` schema
+- [x] WHEN I add `GET /api/posts/:slug/related`
+- [x] THEN it uses `gleamdb.traverse` to resolve related content via the Graph Traversal DSL.
+
 ## Phase 5: Autonomous Handoff
-PRD Implemented. All advanced features (Graph, Federation, Time Travel, Aggregates, Parallelism, Hybrid Search, Performance, Observability) verified with tests. 🧙🏾‍♂️
+PRD Implemented. All advanced features (Graph, Federation, Time Travel, Aggregates, Parallelism, Hybrid Search, Performance, Observability, Vendor Sync) verified with tests. 🧙🏾‍♂️

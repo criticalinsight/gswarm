@@ -96,7 +96,13 @@ High-frequency ingestion saturates memory quickly if history is infinite. Use **
 let config = fact.AttributeConfig(
   unique: False, 
   component: False, 
-  retention: fact.LatestOnly
+  retention: fact.LatestOnly,
+  cardinality: fact.One,
+  check: None,
+  composite_group: None,
+  layout: fact.Row,
+  tier: fact.Memory,
+  eviction: fact.AlwaysInMemory
 )
 gleamdb.set_schema(db, "sensor/value", config)
 ```
@@ -147,3 +153,25 @@ The `gleamdb.traverse` API resolves multi-hop relationships using batched ETS lo
 - **Depth guard**: Expressions exceeding `max_depth` are rejected before execution.
 - **Deduplication**: `list.unique()` applied per hop to prevent combinatorial explosion.
 
+### Database Cracking (Phase 56)
+Indices self-tune during queries using JIT partitioning. When a predicate scans an attribute, `cracking.refine_index` splits the data at the query boundary, creating progressively tighter partitions.
+
+- **Zero Config**: No manual index creation needed — cracking happens as a side-effect of queries.
+- **Convergence**: After ~10 queries on the same attribute, the cracking index approaches sorted performance.
+- **Implementation**: `algo/cracking.gleam` manages `CrackingNode` trees with `Pivot` and `Leaf` variants.
+
+### Morsel-Driven Parallelism (Phase 57)
+The `engine/morsel.gleam` scheduler splits large intermediate result sets into work-stealing morsels for parallel scan execution.
+
+- **Threshold**: Queries exceeding 500 intermediate contexts trigger morsel splitting.
+- **Work Stealing**: Idle worker actors steal unprocessed morsels from busy workers.
+- **Linear Scaling**: Parallel scan performance scales linearly with available BEAM schedulers.
+
+### Vendor Sync Protocol (Phase 62)
+Child projects vendor GleamDB source via `rsync`:
+```bash
+rsync -av --delete --exclude='gleamcms/' src/gleamdb/ <child>/src/gleamdb/
+rsync -av src/gleamdb_*_ffi.erl src/gleam_erl_ffi.erl <child>/src/
+rm -f <child>/src/gleamdb/gleamcms.gleam
+```
+This ensures all child projects run the exact same engine code while allowing project-specific consumer modules.

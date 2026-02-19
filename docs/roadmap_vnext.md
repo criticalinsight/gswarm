@@ -90,17 +90,31 @@ Function-closure compilation for hot virtual predicates, bypassing interpreter o
 - **Depth-Limited Engine**: Recursive `do_traverse` with `DepthLimitExceeded` guard.
 - Inspired by SurrealDB gap analysis; delivers graph utility without complecting the data model.
 
-## Future Directions (v2.4.0+)
+### [x] v2.4.0 Release Learnings (Phase 61)
+- `resolve_eid` public helper for `EntityId` unwrapping at API boundary.
+- Top-level re-exports: `gleamdb.out()`, `gleamdb.step_in()` wrappers.
+- Prefetch default flipped to `True`.
+
+### [x] v2.4.0 Vendor Sync & Child Project Modernization (Phase 62)
+- Canonical `rsync` sync protocol for child project vendors.
+- Warning elimination: 23 parent + 7 gswarm + gclaw = 0 total.
+- API migration: `storage/disk` → `mnesia`, removed BM25/index APIs, `engine.run` → `gleamdb.query_state`.
+- `AttributeConfig`: 5 → 9 fields (`composite_group`, `layout`, `tier`, `eviction`).
+- GleamCMS: added `/api/posts/:slug/related` Graph Traversal endpoint.
+- All child projects (gswarm, gclaw, gleamcms): 0 warnings, 0 errors.
+
+## Future Directions (v2.5.0+)
 
 | Item | Description | Priority |
 | :--- | :--- | :--- |
 | **Persistent Pull Cache** | LRU cache for hot pull patterns | Low |
 | **Per-Hop LIMIT** | Pagination guard on graph traversal supernodes | Medium |
 | **Agent Memory Context** | First-class AI context graphs (SurrealDB 3.0 parity) | High |
+| **Sly ACP Bridge** | Expose `traverse` via Tidewave ACP proxy | High |
 
 ---
 
-## Current Status: Phase 60 (Graph Traversal DSL) — v2.4.0
-All original roadmap items through Phase 60 are complete. 125 tests passing. The system is correct, durable, speculative, parallel, horizontally scalable, graph-intelligent, temporally optimized, predictively prefetched, zero-copy serialized, and graph-traversable.
+## Current Status: Phase 62 (Vendor Sync) — v2.4.0
+All original roadmap items through Phase 62 are complete. 125 tests passing. The system is correct, durable, speculative, parallel, horizontally scalable, graph-intelligent, temporally optimized, predictively prefetched, zero-copy serialized, graph-traversable, and vendor-synchronized across all child projects.
 
 🧙🏾‍♂️: "Simple made easy. Every capability earned through the EAVT foundation, never complected."

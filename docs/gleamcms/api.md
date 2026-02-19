@@ -79,3 +79,18 @@ let status = post.get_status(p)
 ## 4. Analytical Stats
 - **Endpoint**: `GET /admin/stats`
 - **Function**: Returns a live count of all posts in the store using Distributed Aggregates.
+
+## 5. Graph Traversal API (v2.4.0)
+Discover related content using the Graph Traversal DSL.
+
+### Related Posts
+- **Endpoint**: `GET /api/posts/:slug/related`
+- **Auth**: `Authorization: Bearer <sovereign-token>`
+- **Response**:
+```json
+[
+  {"title": "Related Post Title", "slug": "related-post-slug"},
+  {"title": "Another Related", "slug": "another-related"}
+]
+```
+- **Mechanism**: Uses `gleamdb.traverse(db, eid, [gleamdb.out("cms.post/related_posts")], 2)` to discover posts linked up to 2 hops via the `cms.post/related_posts` attribute.

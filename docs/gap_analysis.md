@@ -62,8 +62,17 @@ As GleamDB reaches Phase 60, it is a robust engine that has **closed the critica
 ### 27. The Federated Pulse (Phase 15) — ✅ Multi-shard coordinate reduction and real-time WAL Streaming.
 ### 28. Advanced Features (Phase 59) — ✅ Predictive Prefetching ring buffer and Zero-Copy `term_to_binary` serialization.
 ### 29. Graph Traversal DSL (Phase 60) — ✅ Constrained `Out`/`In` traversal with depth guards.
+### 30. v2.4.0 Release Learnings (Phase 61) — ✅ `resolve_eid` helper, top-level re-exports, prefetch default flipped.
+### 31. Vendor Sync & Modernization (Phase 62) — ✅ Canonical rsync sync across 3 child projects (gswarm, gclaw, gleamcms). 0 warnings. Graph Traversal API in CMS.
+
+| Feature | GleamDB | Datomic | XTDB | CozoDB |
+| :--- | :--- | :--- | :--- | :--- |
+| **Vendor Sync Protocol** | ✅ | N/A | N/A | N/A |
+| **Database Cracking** | ✅ | ❌ | ❌ | ❌ |
+| **Morsel Parallelism** | ✅ | ❌ | ❌ | ❌ |
+| **Columnar Analytics** | ✅ | ❌ | ⚠️ | ✅ |
 
 ---
 
-## Current Status: Phase 60 - Graph Traversal DSL (v2.4.0) 🧙🏾‍♂️
-GleamDB v2.4.0 is a hardened, resilient, horizontally sharded Datalog engine with predictive prefetching, zero-copy serialization, and constrained graph traversal — all without complecting the EAVT foundation.
+## Current Status: Phase 62 - Vendor Sync & Modernization (v2.4.0) 🧙🏾‍♂️
+GleamDB v2.4.0 is a hardened, resilient, horizontally sharded Datalog engine with predictive prefetching, zero-copy serialization, constrained graph traversal, database cracking, morsel parallelism, and vendor-synchronized child projects — all without complecting the EAVT foundation.

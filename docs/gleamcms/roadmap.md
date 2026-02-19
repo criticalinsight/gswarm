@@ -24,6 +24,11 @@ GleamCMS has established a sovereign foundation. The next phases focus on **Expe
 - [x] **Sectional Facts**: Native `hero`, `features`, `stats`, and `cta` block manifestation.
 - [x] **Premium Flourishes**: Scroll Reveal, Grid Rhythm, and Hero Split variations.
 
+## Phase 8.5: Graph Traversal API (v2.4.0) ✅
+- [x] **Related Posts**: `GET /api/posts/:slug/related` using `gleamdb.traverse` with `Out("cms.post/related_posts")`.
+- [x] **Schema**: `cms.post/related_posts` attribute (cardinality: Many) for inter-post linking.
+- [x] **Depth**: Configurable 1-3 hop traversal via the Graph Traversal DSL.
+
 ## Phase 9: Collaborative Workflows (v2.7.0)
 **Goal**: Enable multi-agent collaboration on shared content.
 - [ ] **CRDT Integration**: Conflict-Free Replicated Data Types for real-time collaborative editing in the Lustre editor.

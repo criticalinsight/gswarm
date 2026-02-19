@@ -220,6 +220,22 @@ Throughout development, we asked: *Is the increased complexity worth the utility
     3.  **Depth Guard**: Rejects expressions longer than `max_depth` with `DepthLimitExceeded`.
 *   **Hickey Principle:** We achieved SurrealDB's graph utility without complecting the EAVT data model.
 *   **Result:** Concise 1-3 hop traversals (e.g., `User → Friends → Posts ← Likes`) resolved natively inside ETS.
+### Phase 61: v2.4.0 Release Learnings
+*   **The Problem:** New features (Graph Traversal, Prefetching, Zero-Copy) introduced API surface inconsistencies — `EntityId` unwrapping pain, internal module imports leaking to consumers, prefetch disabled by default.
+*   **The Solution:**
+    1.  **`resolve_eid`**: Public helper to bridge `fact.Eid` and `Int` at the API boundary.
+    2.  **Top-Level Re-exports**: `gleamdb.out()`, `gleamdb.step_in()` wrappers eliminate need to import `shared/types`.
+    3.  **Default Flip**: `prefetch_enabled` changed from `False` to `True` — earned capability should be on by default.
+*   **Hickey Principle:** The API boundary should handle wrapping/unwrapping, not the consumer.
+
+### Phase 62: v2.4.0 Vendor Sync & Child Project Modernization
+*   **The Problem:** Three child projects (gswarm, gclaw, gleamcms) contained stale forks of GleamDB, missing Phases 55-61 features and accumulating 30+ compiler warnings.
+*   **The Solution:**
+    1.  **Canonical Vendor Sync**: Established `rsync` protocol for syncing canonical source to child vendors.
+    2.  **Warning Elimination**: Fixed 23 warnings in parent (unused imports, deprecated `list.range`, unused vars), 7 in gswarm, all in gclaw.
+    3.  **API Migration**: `storage/disk` → `mnesia`, `transactor.create_bm25_index` → removed, `engine.run` → `gleamdb.query_state`, `AttributeConfig` 5→9 fields.
+    4.  **New Capability**: Added Graph Traversal API to GleamCMS (`/api/posts/:slug/related`).
+*   **Result:** All 3 child projects: 0 warnings, 0 errors. 125 tests (parent), 5 tests (gclaw). Services verified live.
 
 ---
-*GleamDB is now a complete expression of analytical intent.* 🧙🏾‍♂️
+*GleamDB v2.4.0 is a complete, hardened, vendor-synchronized expression of analytical intent.* 🧙🏾‍♂️
