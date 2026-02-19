@@ -1,6 +1,34 @@
-# 🚀 Sovereign Intelligence v2.1.0
-
 # Release Notes
+
+## [2.4.0] - 2026-02-20
+### Added
+- **Predictive Prefetching**: Background heuristic analyzes query history to warm hot attributes. Enabled by default.
+- **Zero-Copy Serialization**: `PullRawBinary(BitArray)` and `Blob(BitArray)` variants for large binary payloads. Configurable threshold.
+- **Graph Traversal DSL**: `gleamdb.traverse(db, eid, expr, depth)` for multi-hop relationship chasing with `Out`/`In` edge types.
+- **Database Cracking**: JIT partitioning in `algo/cracking.gleam` — indices self-tune during queries.
+- **Morsel-Driven Parallelism**: `engine/morsel.gleam` — work-stealing scheduler for parallel scans.
+- **Tiered Sovereignty**: `StorageTier` (Memory/Disk) and `EvictionPolicy` for lifecycle-aware attribute management.
+- **Columnar Analytics**: `ColumnChunk` and vectorized aggregates in `algo/vectorized.gleam` for HTAP workloads.
+- **JIT-Lite Predicates**: Dynamic closure composition for hot-path filter optimization.
+- **Utility Helpers**: `resolve_eid`, `out()`, `step_in()` wrappers for ergonomic API surface.
+
+### Changed
+- **`AttributeConfig`**: Now 9 fields (added `composite_group`, `layout`, `tier`, `eviction`).
+- **Pull API Constructors**: Renamed `Map`→`PullMap`, `Single`→`PullSingle`, `Many`→`PullMany` for clarity.
+- **`PullResult`/`PullPattern`**: Type aliases moved from `engine` to `types` module.
+- **`prefetch_enabled`**: Default changed from `False` to `True`.
+- **Deprecated `list.range`**: Replaced with `list.repeat` + `list.index_map` across all test files.
+- **Removed `storage/disk.gleam`**: Replaced by `storage/mnesia.gleam` adapter.
+
+### Child Project Modernization
+- **gswarm**: Vendored v2.4.0, fixed 10 consumer files, 0 warnings, 125 tests passing.
+- **gclaw**: Vendored v2.4.0, removed deprecated index APIs, migrated to `gleamdb.query_state`, 0 warnings, 5 tests passing.
+- **gleamcms**: Added `/api/posts/:slug/related` endpoint using Graph Traversal DSL.
+
+### Documentation
+- Updated v2.4.0 release learnings with resolution status for all blockers.
+- Updated README with v2.4.0 features.
+- This release notes entry.
 
 ## [2.1.0] - 2026-02-18
 ### Added

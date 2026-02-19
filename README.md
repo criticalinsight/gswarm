@@ -39,7 +39,10 @@ GleamDB is a high-performance, analytical Datalog engine built natively for the 
 - **The Federated Pulse (Phase 15)**: Multi-shard coordinate reduction for distributed aggregates (`Sum`, `Count`, `Min`, `Max`) and real-time **WAL Streaming** for reactive push telemetry.
 - **Sovereign Search (Phase 30)**: Real-time forensic verification of trader edge using **Gemini 2.5 Flash** with active **Google Search Grounding**, enforcing a strict **50% ROI Floor**.
 - **OTP Native**: Queries are independent actors, allowing for introspection, suspension, and distribution.
-- **GleamCMS (v2.2.0)**: A fact-oriented content management system built directly on the engine. Featuring a Lustre interactive editor, decentralized **Fact-Sync Bridge**, and the **AI Site Architect** for generating generative, section-based landing pages with WP-level flourishes.
+- **GleamCMS (v2.4.0)**: A fact-oriented content management system built directly on the engine. Featuring a Lustre interactive editor, decentralized **Fact-Sync Bridge**, **Graph Traversal API** for related content discovery, and the **AI Site Architect** for generating generative, section-based landing pages.
+- **Predictive Prefetching (v2.4.0)**: Background heuristic auto-warms hot attributes from query history.
+- **Graph Traversal DSL (v2.4.0)**: `gleamdb.traverse(db, eid, [out("attr")], depth)` for multi-hop edge chasing.
+- **Database Cracking (v2.4.0)**: Indices self-tune during queries — zero-configuration adaptive performance.
 
 ## ⚡ Performance
 > "Speed is a byproduct of correctness."
@@ -55,7 +58,7 @@ GleamDB is a high-performance, analytical Datalog engine built natively for the 
 Add `gleamdb` to your `gleam.toml`:
 ```toml
 [dependencies]
-gleamdb = "2.0.0"
+gleamdb = "2.4.0"
 ```
 
 Initialize with **Silicon Saturation** (ETS-backed indices) for O(1) concurrent reads:
@@ -179,10 +182,20 @@ curl -X POST http://localhost:8000/api/facts/sync \
 ```
 ```
 
-### Memory Safety (Retention)
 ```gleam
-let config = fact.AttributeConfig(unique: False, component: False, retention: fact.LatestOnly)
+let config = fact.AttributeConfig(
+  unique: False, component: False, retention: fact.LatestOnly,
+  cardinality: fact.One, check: None,
+  composite_group: None, layout: fact.Row,
+  tier: fact.Memory, eviction: fact.AlwaysInMemory
+)
 gleamdb.set_schema(db, "ticker/price", config)
+```
+
+### Graph Traversal DSL (v2.4.0)
+```gleam
+// Find related posts up to 2 hops
+let related = gleamdb.traverse(db, post_eid, [gleamdb.out("related_to")], 2)
 ```
 
 ## 📚 Documentation
@@ -197,7 +210,8 @@ gleamdb.set_schema(db, "ticker/price", config)
 - [Architecture Details](docs/architecture.md)
 - [Datalog Specification](docs/specs/gleam_datalog.md)
 - [The Completeness (Roadmap)](docs/specs/the_completeness.md)
-- [Gap Analysis](docs/gap_analysis.md)
+- [v2.4.0 Release Learnings](docs/specs/v2.4.0_release_learnings.md)
+- [Graph Traversal DSL](docs/specs/graph-traversal-dsl.md)
 
 ## 🤝 Contributing
 GleamDB is built with the goal of providing a "Sovereign Knowledge Service" for autonomous agents like **Sly**. Contributions that respect the de-complecting philosophy are welcome.

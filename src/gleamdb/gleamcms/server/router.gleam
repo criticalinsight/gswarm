@@ -211,7 +211,7 @@ fn handle_health(db: gleamdb.Db) -> Response {
   case gleamdb.query(db, q) {
     _ -> {
       wisp.ok()
-      |> wisp.json_body("{\"status\": \"healthy\", \"engine\": \"v2.1.0\"}")
+      |> wisp.json_body("{\"status\": \"healthy\", \"engine\": \"v2.4.0\"}")
     }
   }
 }
