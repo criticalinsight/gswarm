@@ -73,7 +73,7 @@ fn diff(old: QueryResult, new: QueryResult) -> #(QueryResult, QueryResult) {
   let removed_rows = set.difference(old_set, new_set) |> set.to_list()
   
   #(
-    types.QueryResult(rows: added_rows, metadata: new.metadata),
-    types.QueryResult(rows: removed_rows, metadata: new.metadata),
+    types.QueryResult(rows: added_rows, metadata: new.metadata, updated_columnar_store: None),
+    types.QueryResult(rows: removed_rows, metadata: new.metadata, updated_columnar_store: None),
   )
 }

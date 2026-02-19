@@ -27,13 +27,17 @@ pub fn main() {
     component: False,
     retention: fact.LatestOnly,
     cardinality: fact.One,
-    check: None
+    check: None,
+    composite_group: None,
+    layout: fact.Row,
+    tier: fact.Memory,
+    eviction: fact.AlwaysInMemory
   )
   let _ = gleamdb.set_schema(primary_db, "correction/id", config)
   let _ = gleamdb.set_schema(primary_db, "prediction/id", config)
   
   let non_unique = fact.AttributeConfig(
-     unique: False, component: False, retention: fact.LatestOnly, cardinality: fact.One, check: None
+     unique: False, component: False, retention: fact.LatestOnly, cardinality: fact.One, check: None, composite_group: None, layout: fact.Row, tier: fact.Memory, eviction: fact.AlwaysInMemory
   )
   let _ = gleamdb.set_schema(primary_db, "correction/lesson", non_unique)
   let _ = gleamdb.set_schema(primary_db, "correction/weight", non_unique)

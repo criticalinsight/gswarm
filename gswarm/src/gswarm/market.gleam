@@ -240,9 +240,9 @@ pub fn ingest_tick_with_vector(db: gleamdb.Db, tick: Tick, vector: List(Float)) 
 // --- Schema & Market Creation ---
 
 pub fn configure_tick_retention(db: gleamdb.Db) {
-  let config = fact.AttributeConfig(unique: False, component: False, retention: fact.All, cardinality: fact.Many, check: None)
-  let component_config = fact.AttributeConfig(unique: False, component: True, retention: fact.All, cardinality: fact.Many, check: None)
-  let unique_config = fact.AttributeConfig(unique: True, component: False, retention: fact.All, cardinality: fact.Many, check: None)
+  let config = fact.AttributeConfig(unique: False, component: False, retention: fact.All, cardinality: fact.Many, check: None, composite_group: None, layout: fact.Row, tier: fact.Memory, eviction: fact.AlwaysInMemory)
+  let component_config = fact.AttributeConfig(unique: False, component: True, retention: fact.All, cardinality: fact.Many, check: None, composite_group: None, layout: fact.Row, tier: fact.Memory, eviction: fact.AlwaysInMemory)
+  let unique_config = fact.AttributeConfig(unique: True, component: False, retention: fact.All, cardinality: fact.Many, check: None, composite_group: None, layout: fact.Row, tier: fact.Memory, eviction: fact.AlwaysInMemory)
   
   // Market ID must be unique
   let _ = gleamdb.set_schema(db, "market/id", unique_config)

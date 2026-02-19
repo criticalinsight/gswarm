@@ -1,5 +1,6 @@
 import gleam/option.{type Option, None, Some}
 import gleam/list
+import gleam/dynamic
 import gleamdb/fact.{type Value, type EntityId, type Datom}
 
 pub type TableName = String
@@ -67,6 +68,27 @@ fn do_lookup_avet(table: TableName, key: any) -> List(#(any, EntityId))
 pub fn prune_historical(table: TableName, eid: EntityId, attr: String) -> Nil {
   do_prune_eavt(table, eid, attr)
 }
+
+pub fn serialize_term(term: any) -> BitArray {
+  do_term_to_binary(term)
+}
+
+@external(erlang, "erlang", "term_to_binary")
+fn do_term_to_binary(data: any) -> BitArray
+
+pub fn deserialize_term(b: BitArray) -> dynamic.Dynamic {
+  do_binary_to_term(b)
+}
+
+@external(erlang, "erlang", "binary_to_term")
+fn do_binary_to_term(data: BitArray) -> dynamic.Dynamic
+
+pub fn get_raw_binary(table: TableName, key: any) -> Result(BitArray, Nil) {
+  do_get_raw_binary(table, key)
+}
+
+@external(erlang, "gleamdb_ets_ffi", "get_raw_binary")
+fn do_get_raw_binary(table: TableName, key: any) -> Result(BitArray, Nil)
 
 pub fn prune_historical_aevt(table: TableName, attr: String, eid: EntityId) -> Nil {
   do_prune_aevt(table, attr, eid)

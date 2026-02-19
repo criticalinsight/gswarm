@@ -1,11 +1,23 @@
 import gleam/string
 import gleam/list
+import gleam/dict.{type Dict}
 import gleam/bit_array
+import gleam/int
+import gleam/float
 import gleam/option.{type Option}
-
+import gleam/order
 
 @external(erlang, "erlang", "phash2")
 pub fn phash2(data: a) -> Int
+
+pub fn compare(v1: Value, v2: Value) -> order.Order {
+  case v1, v2 {
+    Int(i1), Int(i2) -> int.compare(i1, i2)
+    Float(f1), Float(f2) -> float.compare(f1, f2)
+    Str(s1), Str(s2) -> string.compare(s1, s2)
+    _, _ -> string.compare(to_string(v1), to_string(v2))
+  }
+}
 
 pub fn to_string(v: Value) -> String {
   string.inspect(v)
@@ -64,6 +76,8 @@ pub type Value {
   List(List(Value))
   Vec(List(Float))
   Ref(EntityId)
+  Map(Dict(String, Value))
+  Blob(BitArray)
 }
 
 pub type Operation {
@@ -71,10 +85,27 @@ pub type Operation {
   Retract
 }
 
+pub type StorageLayout {
+  Row
+  Columnar
+}
+
 pub type Retention {
   All
   LatestOnly
   Last(Int)
+}
+
+pub type StorageTier {
+  Memory
+  Disk
+  Cloud
+}
+
+pub type EvictionPolicy {
+  AlwaysInMemory
+  LruToDisk
+  LruToCloud
 }
 
 pub type Cardinality {
@@ -89,6 +120,23 @@ pub type AttributeConfig {
     retention: Retention,
     cardinality: Cardinality,
     check: Option(String),
+    composite_group: Option(String),
+    layout: StorageLayout,
+    tier: StorageTier,
+    eviction: EvictionPolicy,
+  )
+}
+
+pub type CrackingNode {
+  Leaf(values: List(Value))
+  Branch(pivot: Value, left: CrackingNode, right: CrackingNode)
+}
+
+pub type ColumnChunk {
+  ColumnChunk(
+    attribute: Attribute,
+    values: CrackingNode,
+    stats: Dict(String, Value),
   )
 }
 
@@ -102,6 +150,7 @@ pub type Datom {
     attribute: Attribute,
     value: Value,
     tx: Transaction,
+    tx_index: Int,
     valid_time: Int,
     operation: Operation,
   )
@@ -117,9 +166,10 @@ pub fn new_datom(
   attribute attribute: Attribute,
   value value: Value,
   tx tx: Transaction,
+  tx_index tx_index: Int,
   operation operation: Operation,
 ) -> Datom {
-  Datom(entity, attribute, value, tx, 0, operation)
+  Datom(entity, attribute, value, tx, tx_index, 0, operation)
 }
 
 pub fn encode_compact(v: Value) -> BitArray {
@@ -140,6 +190,14 @@ pub fn encode_compact(v: Value) -> BitArray {
       <<5:8, {list.length(v)}:32, b:bits>>
     }
     Ref(EntityId(id)) -> <<6:8, id:64>>
+    Map(m) -> {
+      let b = dict.fold(m, <<>>, fn(acc, key, val) {
+        let k_bits = <<key:utf8>>
+        <<acc:bits, {string.length(key)}:32, k_bits:bits, {encode_compact(val)}:bits>>
+      })
+      <<7:8, {dict.size(m)}:32, b:bits>>
+    }
+    Blob(bin) -> <<8:8, {byte_size(bin)}:32, bin:bits>>
   }
 }
 
@@ -160,6 +218,7 @@ pub fn encode_datom(d: Datom) -> BitArray {
     {byte_size(a_bits)}:32, a_bits:bits,
     op_id:8,
     d.tx:64,
+    d.tx_index:32,
     d.valid_time:64,
     v_bits:bits
   >>
@@ -189,7 +248,36 @@ pub fn decode_compact(bits: BitArray) -> Result(#(Value, BitArray), Nil) {
       }
     }
     <<6:8, id:64, rest:bits>> -> Ok(#(Ref(EntityId(id)), rest))
+    <<7:8, len:32, rest:bits>> -> {
+      case decode_map_loop(rest, len, dict.new()) {
+        Ok(#(m, tail)) -> Ok(#(Map(m), tail))
+        Error(_) -> Error(Nil)
+      }
+    }
+    <<8:8, len:32, bin:bytes-size(len), rest:bits>> -> Ok(#(Blob(bin), rest))
     _ -> Error(Nil)
+  }
+}
+
+fn decode_map_loop(bits: BitArray, len: Int, acc: Dict(String, Value)) -> Result(#(Dict(String, Value), BitArray), Nil) {
+  case len {
+    0 -> Ok(#(acc, bits))
+    _ -> {
+      case bits {
+        <<k_len:32, k_bits:bytes-size(k_len), rest:bits>> -> {
+          case bit_array.to_string(k_bits) {
+            Ok(key) -> {
+              case decode_compact(rest) {
+                Ok(#(val, tail)) -> decode_map_loop(tail, len - 1, dict.insert(acc, key, val))
+                Error(_) -> Error(Nil)
+              }
+            }
+            Error(_) -> Error(Nil)
+          }
+        }
+        _ -> Error(Nil)
+      }
+    }
   }
 }
 
@@ -219,7 +307,7 @@ fn decode_vec_loop(bits: BitArray, len: Int, acc: List(Float)) -> Result(#(List(
 
 pub fn decode_datom(bits: BitArray) -> Result(#(Datom, BitArray), Nil) {
   case bits {
-    <<e_id:64, a_len:32, a_bits:bytes-size(a_len), op_id:8, tx:64, vt:64,
+    <<e_id:64, a_len:32, a_bits:bytes-size(a_len), op_id:8, tx:64, txi:32, vt:64,
       val_bits:bits>> -> {
       case bit_array.to_string(a_bits) {
         Ok(attr) -> {
@@ -235,6 +323,7 @@ pub fn decode_datom(bits: BitArray) -> Result(#(Datom, BitArray), Nil) {
                   attribute: attr,
                   value: val,
                   tx: tx,
+                  tx_index: txi,
                   valid_time: vt,
                   operation: op,
                 ),

@@ -5,20 +5,20 @@ import gleam/string
 import gleamdb
 import gleamdb/fact
 import gleamdb/engine
-import gleamdb/shared/types.{Out}
+import gleamdb/shared/types.{Out, Attr, PullMap}
 
 pub fn pulse_market(db: gleamdb.Db, market_id: String) {
   // Use gleamdb.pull to get a structured snapshot of the market identity.
   // This demonstrates structured data retrieval vs triple queries.
   let pattern = [
-    engine.Attr("market/id"),
-    engine.Attr("market/question")
+    Attr("market/id"),
+    Attr("market/question")
   ]
   
   let result = gleamdb.pull(db, fact.Lookup(#("market/id", fact.Str(market_id))), pattern)
   
   case result {
-    engine.Map(data) -> {
+    PullMap(data) -> {
       io.println("🧠 Observer Pulse: Market Snapshot")
       io.println("   ID: " <> string.inspect(data))
     }

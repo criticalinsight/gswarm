@@ -16,8 +16,13 @@ import gleamdb/process_extra
 import gleamdb/raft
 
 pub type Db = transactor.Db
-pub type PullResult = engine.PullResult
-pub type PullPattern = engine.PullPattern
+pub type PullResult = types.PullResult
+pub type PullPattern = types.PullPattern
+pub type TraversalStep = types.TraversalStep
+pub type TraversalExpr = types.TraversalExpr
+
+pub fn out(attr: String) -> TraversalStep { types.Out(attr) }
+pub fn step_in(attr: String) -> TraversalStep { types.In(attr) }
 
 pub fn new() -> Db {
   new_with_adapter(None)
@@ -190,7 +195,7 @@ pub fn pull(
   db: Db,
   eid: fact.Eid,
   pattern: PullPattern,
-) -> engine.PullResult {
+) -> PullResult {
   let state = transactor.get_state(db)
   let id = case eid {
     fact.Uid(i) -> i
@@ -201,25 +206,47 @@ pub fn pull(
   engine.pull(state, fact.Uid(id), pattern)
 }
 
+pub fn resolve_eid(db: Db, eid: fact.Eid) -> Int {
+  let state = transactor.get_state(db)
+  let fact.EntityId(id_int) = case eid {
+    fact.Uid(i) -> i
+    fact.Lookup(#(a, v)) -> {
+       index.get_entity_by_av(state.avet, a, v) |> result.unwrap(fact.EntityId(0))
+    }
+  }
+  id_int
+}
+
+pub fn traverse(
+  db: Db,
+  eid: fact.Eid,
+  expr: types.TraversalExpr,
+  max_depth: Int,
+) -> Result(List(fact.Value), String) {
+  let state = transactor.get_state(db)
+  let id_int = resolve_eid(db, eid)
+  engine.traverse(state, id_int, expr, max_depth)
+}
+
 pub fn diff(db: Db, from_tx: Int, to_tx: Int) -> List(fact.Datom) {
   let state = transactor.get_state(db)
   engine.diff(state, from_tx, to_tx)
 }
 
 pub fn pull_all() -> PullPattern {
-  [engine.Wildcard]
+  [types.Wildcard]
 }
 
 pub fn pull_attr(attr: String) -> PullPattern {
-  [engine.Attr(attr)]
+  [types.Attr(attr)]
 }
 
 pub fn pull_except(exclusions: List(String)) -> PullPattern {
-  [engine.Except(exclusions)]
+  [types.Except(exclusions)]
 }
 
 pub fn pull_recursive(attr: String, depth: Int) -> PullPattern {
-  [engine.Recursion(attr, depth)]
+  [types.Recursion(attr, depth)]
 }
 
 pub fn query(db: Db, q_clauses: List(BodyClause)) -> QueryResult {

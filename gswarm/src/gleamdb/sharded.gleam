@@ -11,9 +11,9 @@ import gleam/otp/actor
 import gleam/erlang/process
 import gleamdb
 import gleamdb/fact.{type Eid, Uid, Lookup}
-import gleamdb/shared/types.{type BodyClause, type DbState, type QueryResult}
+import gleamdb/shared/types.{type BodyClause, type DbState, type QueryResult, type PullPattern, type PullResult, PullMap}
 import gleamdb/storage.{type StorageAdapter}
-import gleamdb/engine.{type PullPattern, type PullResult, Map}
+import gleamdb/engine
 import gleamdb/vec_index
 
 pub type ShardedDb {
@@ -218,6 +218,7 @@ pub fn query_at(
         shard_id: option.None,
         aggregates: dict.new(),
       ),
+      updated_columnar_store: option.None,
     ),
     run: fn(acc, _) {
       let res =
@@ -231,6 +232,7 @@ pub fn query_at(
             shard_id: option.None,
             aggregates: dict.new(),
           ),
+          updated_columnar_store: option.None,
         ))
 
       let merged_metadata = types.QueryMetadata(
@@ -257,9 +259,9 @@ pub fn query_at(
       case dict.size(merged_metadata.aggregates) > 0 {
         True -> {
            let rows = coordinate_reduce(all_rows, merged_metadata.aggregates)
-           types.QueryResult(rows: rows, metadata: merged_metadata)
+           types.QueryResult(rows: rows, metadata: merged_metadata, updated_columnar_store: option.None)
         }
-        False -> types.QueryResult(rows: all_rows, metadata: merged_metadata)
+        False -> types.QueryResult(rows: all_rows, metadata: merged_metadata, updated_columnar_store: option.None)
       }
     },
   )
@@ -330,12 +332,13 @@ pub fn bloom_query(
       },
       execution_time_ms: probe_res.metadata.execution_time_ms
       + build_res.metadata.execution_time_ms,
-      shard_id: option.None,
+      shard_id: probe_res.metadata.shard_id,
       aggregates: dict.merge(
         probe_res.metadata.aggregates,
         build_res.metadata.aggregates,
       ),
     ),
+    updated_columnar_store: option.None,
   )
 }
 
@@ -407,9 +410,9 @@ pub fn pull(db: ShardedDb, eid: Eid, pattern: PullPattern) -> PullResult {
   int.range(
     from: 0,
     to: list.length(shard_list),
-    with: Map(dict.new()),
+    with: PullMap(dict.new()),
     run: fn(acc, _) {
-      let res = process.receive(self, 5000) |> result.unwrap(Map(dict.new()))
+      let res = process.receive(self, 5000) |> result.unwrap(PullMap(dict.new()))
       merge_pull_results(acc, res)
     },
   )
@@ -459,9 +462,9 @@ pub fn stop(db: ShardedDb) -> Nil {
 
 fn merge_pull_results(a: PullResult, b: PullResult) -> PullResult {
   case a, b {
-    Map(d1), Map(d2) -> Map(dict.merge(d1, d2))
-    _, Map(_) -> b
-    Map(_), _ -> a
+    PullMap(d1), PullMap(d2) -> PullMap(dict.merge(d1, d2))
+    _, PullMap(_) -> b
+    PullMap(_), _ -> a
     _, _ -> a
   }
 }

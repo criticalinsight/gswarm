@@ -5,8 +5,7 @@ import gleam/option
 import gleam/erlang/process
 import gleamdb
 import gleamdb/fact
-import gleamdb/engine.{type PullResult}
-import gleamdb/shared/types.{type BodyClause, type QueryResult}
+import gleamdb/shared/types.{type BodyClause, type QueryResult, type PullResult}
 import gleamdb/sharded
 import gswarm/node.{type ShardedContext}
 import gswarm/shard_manager
@@ -39,7 +38,8 @@ pub fn query_all(ctx: ShardedContext, clauses: List(BodyClause)) -> QueryResult 
       
       let empty_res = types.QueryResult(
         rows: [], 
-        metadata: types.QueryMetadata(tx_id: option.None, valid_time: option.None, execution_time_ms: 0, shard_id: option.None, aggregates: dict.new())
+        metadata: types.QueryMetadata(tx_id: option.None, valid_time: option.None, execution_time_ms: 0, shard_id: option.None, aggregates: dict.new()),
+        updated_columnar_store: option.None
       )
       
       let shard_id = shard_manager.get_shard_id(mid, registry.shard_count)

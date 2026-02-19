@@ -54,8 +54,8 @@ pub fn start(db: gleamdb.Db) -> Result(Subject(Message), actor.StartError) {
 }
 
 pub fn configure_schema(db: gleamdb.Db) {
-  let config = fact.AttributeConfig(unique: False, component: False, retention: fact.LatestOnly, cardinality: fact.One, check: None)
-  let unique_config = fact.AttributeConfig(unique: True, component: False, retention: fact.LatestOnly, cardinality: fact.One, check: None)
+  let config = fact.AttributeConfig(unique: False, component: False, retention: fact.LatestOnly, cardinality: fact.One, check: None, composite_group: None, layout: fact.Row, tier: fact.Memory, eviction: fact.AlwaysInMemory)
+  let unique_config = fact.AttributeConfig(unique: True, component: False, retention: fact.LatestOnly, cardinality: fact.One, check: None, composite_group: None, layout: fact.Row, tier: fact.Memory, eviction: fact.AlwaysInMemory)
   
   let _ = gleamdb.set_schema(db, "insider/id", unique_config)
   let _ = gleamdb.set_schema(db, "insider/competence", config)

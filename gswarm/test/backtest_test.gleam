@@ -29,8 +29,8 @@ pub fn adaptive_backtest_test() {
   }
 
   // Define Schema
-  let unique = fact.AttributeConfig(unique: True, component: False, retention: fact.All, cardinality: fact.Many, check: None)
-  let normal = fact.AttributeConfig(unique: False, component: False, retention: fact.All, cardinality: fact.Many, check: None)
+  let unique = fact.AttributeConfig(unique: True, component: False, retention: fact.All, cardinality: fact.Many, check: None, composite_group: None, layout: fact.Row, tier: fact.Memory, eviction: fact.AlwaysInMemory)
+  let normal = fact.AttributeConfig(unique: False, component: False, retention: fact.All, cardinality: fact.Many, check: None, composite_group: None, layout: fact.Row, tier: fact.Memory, eviction: fact.AlwaysInMemory)
   let _ = gleamdb.set_schema(db, "market/id", unique)
   let _ = gleamdb.set_schema(db, "tick/market", normal)
   let _ = gleamdb.set_schema(db, "tick/price/Yes", normal)

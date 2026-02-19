@@ -11,6 +11,32 @@ import gleamdb/index/art
 import gleamdb/index/bm25
 import gleam/dynamic.{type Dynamic}
 
+pub type PullPattern =
+  List(PullItem)
+
+pub type PullItem {
+  Wildcard
+  Attr(String)
+  Nested(String, PullPattern)
+  Except(List(String))
+  Recursion(String, Int) // attribute, depth
+}
+
+pub type PullResult {
+  PullMap(Dict(String, PullResult))
+  PullSingle(fact.Value)
+  PullMany(List(fact.Value))
+  PullNestedMany(List(PullResult))
+  PullRawBinary(BitArray)
+}
+
+pub type TraversalStep {
+  Out(attribute: String)  // ->
+  In(attribute: String)   // <-
+}
+
+pub type TraversalExpr = List(TraversalStep)
+
 pub type IndexAdapter {
   IndexAdapter(
     name: String,
@@ -29,7 +55,20 @@ pub type ExtensionInstance {
 }
 
 pub type Config {
-  Config(parallel_threshold: Int, batch_size: Int)
+  Config(
+    parallel_threshold: Int,
+    batch_size: Int,
+    prefetch_enabled: Bool,
+    zero_copy_threshold: Int,
+  )
+}
+
+pub type QueryContext {
+  QueryContext(
+    attributes: List(String),
+    entities: List(fact.EntityId),
+    timestamp: Int,
+  )
 }
 
 pub type DbState {
@@ -57,7 +96,9 @@ pub type DbState {
     predicates: Dict(String, fn(fact.Value) -> Bool),
     stored_rules: List(Rule),
     virtual_predicates: Dict(String, VirtualAdapter),
+    columnar_store: Dict(String, List(fact.ColumnChunk)),
     config: Config,
+    query_history: List(QueryContext),
   )
 }
 
@@ -181,6 +222,11 @@ pub type BodyClause {
     variable: String,
     filter: bloom.BloomFilter,
   )
+  Pull(
+    variable: String,
+    entity: Part,
+    pattern: PullPattern,
+  )
 }
 
 pub type Rule {
@@ -227,6 +273,7 @@ pub type QueryResult {
   QueryResult(
     rows: List(Dict(String, fact.Value)),
     metadata: QueryMetadata,
+    updated_columnar_store: Option(Dict(String, List(fact.ColumnChunk))),
   )
 }
 

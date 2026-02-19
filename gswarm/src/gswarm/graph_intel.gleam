@@ -41,7 +41,7 @@ pub fn register_market_constraints(ctx: ShardedContext) -> Result(Nil, String) {
   market.configure_tick_retention(db)
   
   // Configure graph and intelligence attributes
-  let config = fact.AttributeConfig(unique: False, component: False, retention: fact.All, cardinality: fact.Many, check: None)
+  let config = fact.AttributeConfig(unique: False, component: False, retention: fact.All, cardinality: fact.Many, check: None, composite_group: None, layout: fact.Row, tier: fact.Memory, eviction: fact.AlwaysInMemory)
   let _ = gleamdb.set_schema(db, "trades_with", config)
   let _ = gleamdb.set_schema(db, "insider/confidence", config)
   let _ = gleamdb.set_schema(db, "market/influences", config)

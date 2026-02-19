@@ -11,7 +11,7 @@ pub fn retraction_test() {
   let assert Ok(db) = gleamdb.start_named("retraction_test_db_unique", None)
   
   // 1. Setup Schema
-  let component_config = fact.AttributeConfig(unique: False, component: True, retention: fact.All, cardinality: fact.Many, check: None)
+  let component_config = fact.AttributeConfig(unique: False, component: True, retention: fact.All, cardinality: fact.Many, check: None, composite_group: None, layout: fact.Row, tier: fact.Memory, eviction: fact.AlwaysInMemory)
   let assert Ok(_) = gleamdb.set_schema(db, "parent/child", component_config)
   
   // 2. Transact Hierarchical Data

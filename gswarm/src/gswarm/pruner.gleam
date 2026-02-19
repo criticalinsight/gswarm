@@ -87,19 +87,19 @@ fn do_prune(state: PrunerState) {
       
       list.each(candidates, fn(e_val) {
          // Pull all attributes to retract them fully
-         let pattern = [engine.Wildcard]
+         let pattern = [types.Wildcard]
          case e_val {
            fact.Ref(eid) -> {
              let pull_res = engine.pull(transactor.get_state(state.db), fact.Uid(eid), pattern)
              case pull_res {
-               engine.Map(attrs) -> {
+               types.PullMap(attrs) -> {
                  let facts_to_retract = dict.to_list(attrs)
                  |> list.map(fn(pair) {
                    let #(attr, val_res) = pair
                    let val = case val_res {
-                     engine.Single(v) -> v
-                     engine.Many([v, ..]) -> v
-                     engine.Many([]) -> fact.Int(0)
+                     types.PullSingle(v) -> v
+                     types.PullMany([v, ..]) -> v
+                     types.PullMany([]) -> fact.Int(0)
                      _ -> fact.Int(0)
                    }
                    #(fact.Uid(eid), attr, val)
