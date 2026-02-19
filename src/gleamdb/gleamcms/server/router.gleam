@@ -8,7 +8,8 @@ import gleam/string
 import gleam/int
 import gleamdb
 import gleamdb/fact
-import gleamdb/shared/types.{Var}
+import gleamdb/shared/types.{Var, PullMap}
+import gleam/dict
 import gleamdb/gleamcms/editor/app as editor
 import gleamdb/gleamcms/db/post.{Published}
 import gleamdb/gleamcms/builder/generator
@@ -63,6 +64,7 @@ pub fn handle_request(req: Request, db: gleamdb.Db) -> Response {
       use <- require_admin(req)
       case rest {
         ["posts"] -> handle_list_posts(db)
+        ["posts", slug, "related"] -> handle_related_posts(db, slug)
         ["publish"] -> handle_publish(req, db)
         ["facts", "sync"] -> handle_sync(req, db)
         ["generate"] -> handle_generate(req, db)
@@ -442,4 +444,45 @@ fn handle_list_posts(db: gleamdb.Db) -> Response {
   })
   let resp = json.to_string(json_posts)
   wisp.ok() |> wisp.json_body(resp)
+}
+
+fn handle_related_posts(db: gleamdb.Db, slug: String) -> Response {
+  // Use Graph Traversal DSL to find related posts up to depth 2
+  let post_eid = fact.Lookup(#("cms.post/slug", fact.Str(slug)))
+  let expr = [gleamdb.out("cms.post/related_posts")]
+  
+  case gleamdb.traverse(db, post_eid, expr, 2) {
+    Ok(related_values) -> {
+      // Extract EntityIds from the traversal result values
+      let results = list.filter_map(related_values, fn(v) {
+        case v {
+          fact.Ref(eid) -> Ok(gleamdb.pull(db, fact.Uid(eid), gleamdb.pull_all()))
+          _ -> Error(Nil)
+        }
+      })
+      
+      // Format as JSON
+      let json_results = json.array(results, fn(r) {
+        case r {
+          PullMap(d) -> {
+            let title = case dict.get(d, "cms.post/title") {
+              Ok(types.PullSingle(fact.Str(t))) -> t
+              _ -> "Unknown"
+            }
+            let s = case dict.get(d, "cms.post/slug") {
+              Ok(types.PullSingle(fact.Str(t))) -> t
+              _ -> "unknown"
+            }
+            json.object([#("title", json.string(title)), #("slug", json.string(s))])
+          }
+          _ -> json.object([])
+        }
+      })
+      
+      wisp.ok() |> wisp.json_body(json.to_string(json_results))
+    }
+    Error(_) -> {
+      wisp.ok() |> wisp.json_body("[]")
+    }
+  }
 }

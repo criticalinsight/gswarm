@@ -1,5 +1,5 @@
 import gleamdb/fact.{type Datom}
-import gleamdb/storage.{type StorageAdapter, StorageAdapter}
+import gleamdb/storage
 
 @external(erlang, "gleamdb_mnesia_ffi", "init")
 pub fn init_mnesia() -> Nil
@@ -10,12 +10,22 @@ pub fn persist_datom(datom: Datom) -> Nil
 @external(erlang, "gleamdb_mnesia_ffi", "persist_batch")
 pub fn persist_batch(datoms: List(Datom)) -> Nil
 
-pub fn adapter() -> StorageAdapter {
-  StorageAdapter(
-    init: init_mnesia,
-    persist: persist_datom,
-    persist_batch: persist_batch,
-    recover: recover_datoms,
+pub fn adapter() -> storage.StorageAdapter {
+  storage.StorageAdapter(
+    insert: fn(datoms) {
+       persist_batch(datoms)
+       Ok(Nil)
+    },
+    append: fn(datoms) {
+       persist_batch(datoms)
+       Ok(Nil)
+    },
+    read: fn(_attr) {
+       recover_datoms()
+    },
+    read_all: fn() {
+       recover_datoms()
+    },
   )
 }
 

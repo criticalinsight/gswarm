@@ -1,5 +1,5 @@
 -module(gleamdb_ets_ffi).
--export([init_table/2, insert/2, lookup/2, delete/2, prune_eavt/3, prune_aevt/3]).
+-export([init_table/2, insert/2, lookup/2, delete/2, prune_eavt/3, prune_aevt/3, get_raw_binary/2]).
 
 init_table(Name, Type) ->
     TableName = binary_to_atom(Name, utf8),
@@ -42,3 +42,8 @@ prune_aevt(Table, Attr, Key) ->
     Pattern = {Attr, {datom, Key, Attr, '_', '_', '_'}},
     ets:match_delete(T, Pattern),
     ok.
+
+get_raw_binary(Table, Key) ->
+    TableName = binary_to_atom(Table, utf8),
+    Objects = ets:lookup(TableName, Key),
+    {ok, term_to_binary(Objects)}.

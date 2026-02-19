@@ -8,9 +8,20 @@ init() ->
             _ = mnesia:create_schema([node()]),
             application:ensure_all_started(mnesia)
     end,
+    
+    ExpectedAttrs = [entity, attribute, value, tx, tx_index, valid_time, operation],
+    try mnesia:table_info(datoms, attributes) of
+        ExpectedAttrs -> ok;
+        _ -> 
+            error_logger:info_msg("Schema mismatch for table 'datoms'. Deleting and recreating.~n"),
+            mnesia:delete_table(datoms)
+    catch
+        exit:{aborted, _} -> ok % Table does not exist
+    end,
+
     case mnesia:create_table(datoms, [
         {record_name, datom},
-        {attributes, [entity, attribute, value, tx, valid_time, operation]},
+        {attributes, ExpectedAttrs},
         {disc_copies, [node()]}
     ]) of
         {atomic, ok} -> ok;
@@ -33,7 +44,7 @@ persist_batch(Datoms) ->
 
 recover() ->
     F = fun() ->
-        mnesia:match_object(datoms, {datom, '_', '_', '_', '_', '_', '_'}, read)
+        mnesia:match_object(datoms, {datom, '_', '_', '_', '_', '_', '_', '_'}, read)
     end,
     case mnesia:transaction(F) of
         {atomic, Records} -> {ok, Records};

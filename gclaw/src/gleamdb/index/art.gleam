@@ -2,6 +2,7 @@ import gleam/dict.{type Dict}
 import gleam/list
 import gleam/option.{type Option, Some, None}
 import gleam/bit_array
+import gleam/string
 import gleamdb/fact
 
 /// A functional Adaptive Radix Tree (ART) node.
@@ -141,6 +142,14 @@ fn value_to_bytes(v: fact.Value) -> BitArray {
       let bytes = list.fold(l, <<>>, fn(acc, val) { <<acc:bits, { value_to_bytes(val) }:bits>> })
       <<6:8, bytes:bits>>
     }
+    fact.Map(m) -> {
+      let bytes = dict.fold(m, <<>>, fn(acc, k, v) {
+        let k_bits = <<k:utf8>>
+        <<acc:bits, {string.length(k)}:32, k_bits:bits, {value_to_bytes(v)}:bits>>
+      })
+      <<7:8, {dict.size(m)}:32, bytes:bits>>
+    }
+    fact.Blob(b) -> <<8:8, b:bits>>
   }
 }
 
@@ -157,7 +166,8 @@ pub fn bytes_to_value(b: BitArray) -> Option(fact.Value) {
     <<3:8, id:64>> -> Some(fact.Ref(fact.EntityId(id)))
     <<4:8, 1:8>> -> Some(fact.Bool(True))
     <<4:8, 0:8>> -> Some(fact.Bool(False))
-    // Vec and List are harder to reconstruct without length prefix, skipping for now as we only need Str for StartsWith
+    <<8:8, b:bits>> -> Some(fact.Blob(b))
+    // Vec, List, and Map are harder to reconstruct without length prefix, skipping for now as we only need Str for StartsWith
     _ -> None
   }
 }

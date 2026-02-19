@@ -281,6 +281,17 @@ pub fn filter(
   QueryBuilder(clauses: list.append(builder.clauses, [clause]))
 }
 
+/// Pull attributes for an entity into a variable.
+pub fn pull(
+  builder: QueryBuilder,
+  variable: String,
+  entity: types.Part,
+  pattern: types.PullPattern,
+) -> QueryBuilder {
+  let clause = types.Pull(variable, entity, pattern)
+  QueryBuilder(clauses: list.append(builder.clauses, [clause]))
+}
+
 /// Convert builder to a list of clauses for `gleamdb.query`.
 pub fn to_clauses(builder: QueryBuilder) -> List(BodyClause) {
   builder.clauses

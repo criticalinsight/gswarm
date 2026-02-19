@@ -7,16 +7,27 @@ import gleam/list
 import gleamdb/transactor
 import gleamdb/engine
 import gleamdb/fact.{type AttributeConfig, type Fact}
-import gleamdb/shared/types.{type BodyClause, type DbState, type QueryResult, Positive, Subscribe}
+import gleamdb/shared/types.{
+  type BodyClause, type DbState, type QueryResult,
+  Attr, Except, Positive, Recursion, Subscribe, Wildcard,
+}
 import gleamdb/index
+import gleamdb/index/ets
 import gleamdb/storage.{type StorageAdapter}
 import gleamdb/global
 import gleamdb/process_extra
 import gleamdb/raft
 
 pub type Db = transactor.Db
-pub type PullResult = engine.PullResult
-pub type PullPattern = engine.PullPattern
+pub type PullResult = types.PullResult
+pub type PullPattern = types.PullPattern
+pub type TraversalStep = types.TraversalStep
+pub type TraversalExpr = types.TraversalExpr
+
+// Phase 61: Re-export traversal constructors for ergonomic imports
+// Usage: `import gleamdb` then `gleamdb.out("attr")` / `gleamdb.step_in("attr")`
+pub fn out(attr: String) -> TraversalStep { types.Out(attr) }
+pub fn step_in(attr: String) -> TraversalStep { types.In(attr) }
 
 pub fn new() -> Db {
   new_with_adapter(None)
@@ -102,6 +113,34 @@ pub fn retract_at(db: Db, facts: List(Fact), valid_time: Int) -> Result(DbState,
   }
 }
 
+pub fn prune(db: Db, threshold: Int, sovereign: List(String)) -> Int {
+  let reply = process.new_subject()
+  process.send(db, transactor.Prune(threshold, sovereign, reply))
+  case process.receive(reply, 5000) {
+    Ok(count) -> count
+    Error(_) -> 0
+  }
+}
+
+pub fn trigger_eviction(db: Db) -> Result(Nil, String) {
+  process.send(db, transactor.Tick)
+  Ok(Nil)
+}
+
+pub fn retract_entity(db: Db, eid: fact.Eid) -> Result(DbState, String) {
+  case eid {
+    fact.Uid(entity) -> {
+      let reply = process.new_subject()
+      process.send(db, transactor.RetractEntity(entity, reply))
+      case process.receive(reply, 5000) {
+        Ok(res) -> res
+        Error(_) -> Error("Timeout")
+      }
+    }
+    _ -> Error("Only Uid supported for retract_entity")
+  }
+}
+
 pub fn with_facts(state: DbState, facts: List(Fact)) -> Result(types.SpeculativeResult, String) {
   transactor.compute_next_state(state, facts, None, fact.Assert)
   |> result.map(fn(res) { types.SpeculativeResult(state: res.0, datoms: res.1) })
@@ -123,8 +162,17 @@ pub fn get(db: Db, eid: fact.Eid, attr: String) -> List(fact.Value) {
       index.get_entity_by_av(state.avet, a, v) |> result.unwrap(fact.EntityId(0))
     }
   }
-  index.get_datoms_by_entity_attr(state.eavt, id, attr)
-  |> list.map(fn(d) { d.value })
+  case state.ets_name {
+    Some(name) -> {
+       ets.lookup_datoms(name <> "_eavt", id)
+       |> list.filter(fn(d) { d.attribute == attr })
+       |> list.map(fn(d) { d.value })
+    }
+    None -> {
+       index.get_datoms_by_entity_attr(state.eavt, id, attr)
+       |> list.map(fn(d) { d.value })
+    }
+  }
 }
 
 pub fn get_one(db: Db, eid: fact.Eid, attr: String) -> Result(fact.Value, Nil) {
@@ -147,15 +195,36 @@ pub fn history(db: Db, eid: fact.Eid) -> List(fact.Datom) {
       index.get_entity_by_av(state.avet, a, v) |> result.unwrap(fact.EntityId(0))
     }
   }
-  engine.entity_history(state, id)
+  case state.ets_name {
+    Some(name) -> ets.lookup_datoms(name <> "_eavt", id)
+    None -> engine.entity_history(state, id)
+  }
+}
+
+fn extract_pull_attributes(pattern: PullPattern) -> List(String) {
+  list.fold(pattern, [], fn(acc, p) {
+    case p {
+      types.Attr(a) -> [a, ..acc]
+      types.Nested(a, inner) -> [a, ..list.append(extract_pull_attributes(inner), acc)]
+      _ -> acc
+    }
+  })
 }
 
 pub fn pull(
   db: Db,
   eid: fact.Eid,
   pattern: PullPattern,
-) -> engine.PullResult {
+) -> PullResult {
   let state = transactor.get_state(db)
+  case state.config.prefetch_enabled {
+    True -> {
+      let attrs = extract_pull_attributes(pattern)
+      let ctx = types.QueryContext(attributes: attrs, entities: [], timestamp: 0)
+      transactor.log_query(db, ctx)
+    }
+    False -> Nil
+  }
   let id = case eid {
     fact.Uid(i) -> i
     fact.Lookup(#(a, v)) -> {
@@ -165,29 +234,63 @@ pub fn pull(
   engine.pull(state, fact.Uid(id), pattern)
 }
 
+/// Phase 61: Resolve an Eid to a raw Int, handling both Uid and Lookup forms.
+/// Eliminates the repeated `let fact.EntityId(id_int) = ...` pattern in consumer code.
+pub fn resolve_eid(db: Db, eid: fact.Eid) -> Int {
+  let state = transactor.get_state(db)
+  let fact.EntityId(id_int) = case eid {
+    fact.Uid(i) -> i
+    fact.Lookup(#(a, v)) -> {
+       index.get_entity_by_av(state.avet, a, v) |> result.unwrap(fact.EntityId(0))
+    }
+  }
+  id_int
+}
+
+pub fn traverse(
+  db: Db,
+  eid: fact.Eid,
+  expr: types.TraversalExpr,
+  max_depth: Int,
+) -> Result(List(fact.Value), String) {
+  let state = transactor.get_state(db)
+  let id_int = resolve_eid(db, eid)
+  engine.traverse(state, id_int, expr, max_depth)
+}
+
 pub fn diff(db: Db, from_tx: Int, to_tx: Int) -> List(fact.Datom) {
   let state = transactor.get_state(db)
   engine.diff(state, from_tx, to_tx)
 }
 
 pub fn pull_all() -> PullPattern {
-  [engine.Wildcard]
+  [Wildcard]
 }
 
 pub fn pull_attr(attr: String) -> PullPattern {
-  [engine.Attr(attr)]
+  [Attr(attr)]
 }
 
 pub fn pull_except(exclusions: List(String)) -> PullPattern {
-  [engine.Except(exclusions)]
+  [Except(exclusions)]
 }
 
 pub fn pull_recursive(attr: String, depth: Int) -> PullPattern {
-  [engine.Recursion(attr, depth)]
+  [Recursion(attr, depth)]
 }
 
 pub fn query(db: Db, q_clauses: List(BodyClause)) -> QueryResult {
   query_at(db, q_clauses, None, None)
+}
+
+fn extract_query_attributes(clauses: List(BodyClause)) -> List(String) {
+  list.fold(clauses, [], fn(acc, c) {
+    case c {
+      types.Positive(#(_, attr, _)) -> [attr, ..acc]
+      types.Negative(#(_, attr, _)) -> [attr, ..acc]
+      _ -> acc
+    }
+  })
 }
 
 pub fn query_at(
@@ -197,7 +300,15 @@ pub fn query_at(
   as_of_valid: Option(Int),
 ) -> QueryResult {
   let state = transactor.get_state(db)
-  engine.run(state, q_clauses, [], as_of_tx, as_of_valid)
+  case state.config.prefetch_enabled {
+    True -> {
+      let attrs = extract_query_attributes(q_clauses)
+      let ctx = types.QueryContext(attributes: attrs, entities: [], timestamp: 0)
+      transactor.log_query(db, ctx)
+    }
+    False -> Nil
+  }
+  engine.run(state, q_clauses, state.stored_rules, as_of_tx, as_of_valid)
 }
 
 pub fn query_state(state: DbState, q_clauses: List(BodyClause)) -> QueryResult {
@@ -232,17 +343,17 @@ pub fn explain(q_clauses: List(BodyClause)) -> String {
 
 pub fn as_of(db: Db, tx: Int, q_clauses: List(BodyClause)) -> QueryResult {
   let state = transactor.get_state(db)
-  engine.run(state, q_clauses, [], Some(tx), None)
+  engine.run(state, q_clauses, state.stored_rules, Some(tx), None)
 }
 
 pub fn as_of_valid(db: Db, valid_time: Int, q_clauses: List(BodyClause)) -> QueryResult {
   let state = transactor.get_state(db)
-  engine.run(state, q_clauses, [], None, Some(valid_time))
+  engine.run(state, q_clauses, state.stored_rules, None, Some(valid_time))
 }
 
 pub fn as_of_bitemporal(db: Db, tx: Int, valid_time: Int, q_clauses: List(BodyClause)) -> QueryResult {
   let state = transactor.get_state(db)
-  engine.run(state, q_clauses, [], Some(tx), Some(valid_time))
+  engine.run(state, q_clauses, state.stored_rules, Some(tx), Some(valid_time))
 }
 
 pub fn p(triple: types.Clause) -> BodyClause {
@@ -293,6 +404,10 @@ pub fn subscribe(
   process.send(state.reactive_actor, msg)
   process.send(subscriber, types.Initial(results))
   Nil
+}
+
+pub fn subscribe_wal(db: Db, subscriber: Subject(List(fact.Datom))) -> Nil {
+  process.send(db, transactor.Subscribe(subscriber))
 }
 
 pub fn get_state(db: Db) -> DbState {

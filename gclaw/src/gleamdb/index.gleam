@@ -97,21 +97,10 @@ pub fn insert_aevt(index: AIndex, datom: Datom, retention: fact.Retention) -> AI
 
 pub fn insert_avet(index: AVIndex, datom: Datom) -> AVIndex {
   let v_dict = dict.get(index, datom.attribute) |> result.unwrap(dict.new())
-  let new_v_dict = dict.insert(v_dict, datom.value, datom.entity)
-  dict.insert(index, datom.attribute, new_v_dict)
-}
-
-pub fn delete_eavt(index: Index, datom: Datom) -> Index {
-  insert_eavt(index, datom, fact.All)
-}
-
-pub fn delete_aevt(index: AIndex, datom: Datom) -> AIndex {
-  insert_aevt(index, datom, fact.All)
-}
-
-pub fn delete_avet(index: AVIndex, datom: Datom) -> AVIndex {
-  let v_dict = dict.get(index, datom.attribute) |> result.unwrap(dict.new())
-  let new_v_dict = dict.delete(v_dict, datom.value)
+  let new_v_dict = case datom.operation {
+    fact.Assert -> dict.insert(v_dict, datom.value, datom.entity)
+    fact.Retract -> dict.delete(v_dict, datom.value)
+  }
   dict.insert(index, datom.attribute, new_v_dict)
 }
 
@@ -122,19 +111,11 @@ fn result_to_list(res: Result(List(a), b)) -> List(a) {
   }
 }
 
-pub fn filter_by_attribute(index: AIndex, attr: Attribute) -> List(Datom) {
-  dict.get(index, attr) |> result_to_list
-}
-
-pub fn filter_by_entity(index: Index, entity: fact.EntityId) -> List(Datom) {
-  dict.get(index, entity) |> result_to_list
-}
-
 pub fn get_datoms_by_entity_attr_val(
   index: Index,
   entity: fact.EntityId,
-  attr: Attribute,
-  val: Value,
+  attr: String,
+  val: fact.Value,
 ) -> List(Datom) {
   dict.get(index, entity)
   |> result_to_list
@@ -144,28 +125,33 @@ pub fn get_datoms_by_entity_attr_val(
 pub fn get_datoms_by_entity_attr(
   index: Index,
   entity: fact.EntityId,
-  attr: Attribute,
+  attr: String,
 ) -> List(Datom) {
   dict.get(index, entity)
   |> result_to_list
   |> list.filter(fn(d) { d.attribute == attr })
 }
 
-pub fn get_datoms_by_val(index: AIndex, attr: Attribute, val: Value) -> List(Datom) {
+pub fn get_datoms_by_val(index: AIndex, attr: String, val: fact.Value) -> List(Datom) {
   dict.get(index, attr)
   |> result_to_list
   |> list.filter(fn(d) { d.value == val })
 }
 
-pub fn get_all_datoms(index: Index) -> List(Datom) {
+pub fn get_all_datoms_for_attr(index: Index, attr: String) -> List(Datom) {
   dict.values(index)
-  |> list.flatten()
+  |> list.flatten
+  |> list.filter(fn(d) { d.attribute == attr })
 }
 
-pub fn get_all_datoms_for_attr(index: Index, attr: Attribute) -> List(Datom) {
+pub fn get_all_datoms(index: Index) -> List(Datom) {
   dict.values(index)
-  |> list.flatten()
-  |> list.filter(fn(d) { d.attribute == attr })
+  |> list.flatten
+}
+
+pub fn get_all_datoms_aevt(index: AIndex) -> List(Datom) {
+  dict.values(index)
+  |> list.flatten
 }
 
 pub fn get_all_datoms_avet(index: AVIndex) -> List(Datom) {
@@ -174,7 +160,7 @@ pub fn get_all_datoms_avet(index: AVIndex) -> List(Datom) {
     dict.to_list(v_dict)
     |> list.map(fn(pair) {
       let #(val, eid) = pair
-      fact.Datom(entity: eid, attribute: "unknown", value: val, tx: 0, valid_time: 0, operation: fact.Assert)
+      fact.Datom(entity: eid, attribute: "unknown", value: val, tx: 0, tx_index: 0, valid_time: 0, operation: fact.Assert)
     })
   })
 }
@@ -184,4 +170,69 @@ pub fn get_entity_by_av(index: AVIndex, attr: Attribute, val: Value) -> Result(f
     Ok(v_dict) -> dict.get(v_dict, val)
     Error(_) -> Error(Nil)
   }
+}
+
+pub fn filter_by_attribute(index: AIndex, attr: String) -> List(Datom) {
+  dict.get(index, attr)
+  |> result_to_list
+}
+
+pub fn filter_by_entity(index: Index, entity: fact.EntityId) -> List(Datom) {
+  dict.get(index, entity)
+  |> result_to_list
+}
+
+pub fn delete_eavt(index: Index, datom: Datom) -> Index {
+  case dict.get(index, datom.entity) {
+    Ok(bucket) -> {
+      let new_bucket = list.filter(bucket, fn(d) {
+        d.attribute != datom.attribute || d.value != datom.value || d.tx != datom.tx
+      })
+      case new_bucket {
+        [] -> dict.delete(index, datom.entity)
+        _ -> dict.insert(index, datom.entity, new_bucket)
+      }
+    }
+    Error(_) -> index
+  }
+}
+
+pub fn delete_aevt(index: AIndex, datom: Datom) -> AIndex {
+  case dict.get(index, datom.attribute) {
+    Ok(bucket) -> {
+      let new_bucket = list.filter(bucket, fn(d) {
+        d.entity != datom.entity || d.value != datom.value || d.tx != datom.tx
+      })
+      case new_bucket {
+        [] -> dict.delete(index, datom.attribute)
+        _ -> dict.insert(index, datom.attribute, new_bucket)
+      }
+    }
+    Error(_) -> index
+  }
+}
+
+pub fn delete_avet(index: AVIndex, datom: Datom) -> AVIndex {
+  case dict.get(index, datom.attribute) {
+    Ok(v_dict) -> {
+       // Note: Standard AVET usually only keeps current E for (A, V)
+       // If keeping history, this would be more complex.
+       let new_v_dict = dict.delete(v_dict, datom.value)
+       dict.insert(index, datom.attribute, new_v_dict)
+    }
+    Error(_) -> index
+  }
+}
+
+pub fn get_cold_datoms(eavt: Index, cut_off_tx: Int) -> List(fact.Datom) {
+  // Use memory index to find cold items
+  dict.values(eavt)
+  |> list.flatten
+  |> list.filter(fn(d) { d.tx < cut_off_tx })
+}
+
+pub fn evict_from_memory(eavt: Index, datoms: List(fact.Datom)) -> Index {
+  list.fold(datoms, eavt, fn(acc, d) {
+    delete_eavt(acc, d)
+  })
 }

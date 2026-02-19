@@ -1,10 +1,9 @@
 import gleam/option.{None}
-import gleamdb/transactor
+import gleamdb
 import gleamdb/fact
-import gleamdb/storage
-import gleamdb/storage/disk
+import gleamdb/transactor
+import gleamdb/storage/mnesia
 import gleamdb/shared/types
-import gleamdb/engine
 import gleam/list
 import gleam/dict
 import gleam/order
@@ -12,26 +11,26 @@ import gclaw/fact as gfact
 import gleam/int
 import gleamdb/scoring
 import gclaw/memory_types
-import gclaw/metrics
+
 
 pub type Memory {
-  Memory(db: transactor.Db)
+  Memory(db: gleamdb.Db)
 }
 
 pub fn init_ephemeral() -> Memory {
-  init(storage.ephemeral())
+  let db = gleamdb.new()
+  init_with_db(db)
 }
 
-pub fn init_persistent(path: String) -> Memory {
-  init(disk.disk(path))
+pub fn init_persistent(_path: String) -> Memory {
+  // Use mnesia adapter instead of disk
+  let assert Ok(db) = gleamdb.start_distributed("gclaw", option.Some(mnesia.adapter()))
+  init_with_db(db)
 }
 
-fn init(adapter: storage.StorageAdapter) -> Memory {
-  let assert Ok(db) = transactor.start(adapter)
-  
-  // Set up schema
+fn init_with_db(db: gleamdb.Db) -> Memory {
   let _ =
-    transactor.set_schema(
+    gleamdb.set_schema(
       db,
       gfact.msg_timestamp,
       fact.AttributeConfig(
@@ -40,10 +39,14 @@ fn init(adapter: storage.StorageAdapter) -> Memory {
         retention: fact.All,
         cardinality: fact.One,
         check: None,
+        composite_group: None,
+        layout: fact.Row,
+        tier: fact.Memory,
+        eviction: fact.AlwaysInMemory
       ),
     )
   let _ =
-    transactor.set_schema(
+    gleamdb.set_schema(
       db,
       gfact.mem_vector,
       fact.AttributeConfig(
@@ -52,10 +55,14 @@ fn init(adapter: storage.StorageAdapter) -> Memory {
         retention: fact.LatestOnly,
         cardinality: fact.One,
         check: None,
+        composite_group: None,
+        layout: fact.Row,
+        tier: fact.Memory,
+        eviction: fact.AlwaysInMemory
       ),
     )
   let _ =
-    transactor.set_schema(
+    gleamdb.set_schema(
       db,
       gfact.msg_session,
       fact.AttributeConfig(
@@ -64,40 +71,24 @@ fn init(adapter: storage.StorageAdapter) -> Memory {
         retention: fact.All,
         cardinality: fact.One,
         check: None,
+        composite_group: None,
+        layout: fact.Row,
+        tier: fact.Memory,
+        eviction: fact.AlwaysInMemory
       ),
     )
   
-  // Enable BM25 for content
-  let _ = transactor.create_bm25_index(db, memory_types.content_attr)
-
-  // Configure memory attributes
-  let _ = transactor.set_schema(
-      db,
-      memory_types.type_attr,
-      fact.AttributeConfig(unique: False, component: False, retention: fact.All, cardinality: fact.One, check: None)
-  )
-   let _ = transactor.set_schema(
-      db,
-      memory_types.source_attr,
-      fact.AttributeConfig(unique: False, component: False, retention: fact.All, cardinality: fact.One, check: None)
-  )
-    let _ = transactor.set_schema(
-      db,
-      memory_types.tags_attr,
-      fact.AttributeConfig(unique: False, component: False, retention: fact.All, cardinality: fact.Many, check: None)
-  )
-
-  // Register Custom Indices
-  let _ = transactor.register_index_adapter(db, metrics.new_adapter())
-  let _ = transactor.create_index(db, memory_types.importance_attr, "metric", memory_types.importance_attr)
-  let _ = transactor.create_index(db, memory_types.sentiment_attr, "metric", memory_types.sentiment_attr)
+  // Register Custom Indices (Deprecated in v2.4.0)
+  // let _ = gleamdb.register_index_adapter(db, metrics.new_adapter())
+  // let _ = gleamdb.create_index(db, memory_types.importance_attr, "metric", memory_types.importance_attr)
+  // let _ = gleamdb.create_index(db, memory_types.sentiment_attr, "metric", memory_types.sentiment_attr)
 
   Memory(db)
 }
 
 // Basic remember (no vector)
 pub fn remember(mem: Memory, facts: List(fact.Fact)) -> Memory {
-  let _ = transactor.transact(mem.db, facts)
+  let _ = gleamdb.transact(mem.db, facts)
   mem
 }
 
@@ -128,7 +119,7 @@ pub fn recall_hybrid(mem: Memory, query_text: String, query_vec: List(Float), li
       b: 0.75
     )
   ]
-  let bm25_results = engine.run(state, bm25_query, [], None, None).rows
+  let bm25_results = gleamdb.query_state(state, bm25_query).rows
   let bm25_scored = list.filter_map(bm25_results, fn(row) {
     case dict.get(row, "val") {
        Ok(fact.Ref(eid)) -> {
@@ -153,7 +144,7 @@ pub fn recall_hybrid(mem: Memory, query_text: String, query_vec: List(Float), li
   let vec_query = [
     types.SimilarityEntity(variable: "val", vector: query_vec, threshold: 0.7)
   ]
-  let vec_results = engine.run(state, vec_query, [], None, None).rows
+  let vec_results = gleamdb.query_state(state, vec_query).rows
    let vec_scored = list.filter_map(vec_results, fn(row) {
     case dict.get(row, "val") {
        Ok(fact.Ref(eid)) -> Ok(scoring.ScoredResult(eid, 1.0)) // Placeholder
@@ -186,7 +177,7 @@ pub fn get_context_window(mem: Memory, session_id: String, limit: Int, query_vec
     types.OrderBy("ts", types.Desc),
     types.Limit(limit)
   ]
-  let recent_results = engine.run(state, recent_clauses, [], None, None).rows
+  let recent_results = gleamdb.query_state(state, recent_clauses).rows
 
   // 2. Semantic Search (Vector-based)
   // Logic: Search by vector first, then filter by session in Gleam (post-process)
@@ -203,7 +194,7 @@ pub fn get_context_window(mem: Memory, session_id: String, limit: Int, query_vec
         types.Filter(types.Eq(types.Var("sess"), types.Val(fact.Str(session_id)))),
         types.Limit(limit)
       ]
-      let res = engine.run(state, vec_clauses, [], None, None).rows
+      let res = gleamdb.query_state(state, vec_clauses).rows
       res
     }
   }
