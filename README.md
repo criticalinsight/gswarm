@@ -41,7 +41,7 @@ GleamDB is a high-performance, analytical Datalog engine built natively for the 
 - **OTP Native**: Queries are independent actors, allowing for introspection, suspension, and distribution.
 - **GleamCMS (v2.4.0)**: A fact-oriented content management system built directly on the engine. Featuring a Lustre interactive editor, decentralized **Fact-Sync Bridge**, **Graph Traversal API** for related content discovery, and the **AI Site Architect** for generating generative, section-based landing pages.
 - **Predictive Prefetching (v2.4.0)**: Background heuristic auto-warms hot attributes from query history.
-- **Graph Traversal DSL (v2.4.0)**: `gleamdb.traverse(db, eid, [out("attr")], depth)` for multi-hop edge chasing.
+- **Graph Traversal DSL (v2.5.0)**: `gleamdb.traverse(db, eid, [out_limit("attr", 10)], depth)` for multi-hop edge chasing with per-hop supernode protection.
 - **Database Cracking (v2.4.0)**: Indices self-tune during queries — zero-configuration adaptive performance.
 
 ## ⚡ Performance

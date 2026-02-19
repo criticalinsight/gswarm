@@ -145,6 +145,12 @@ When `engine.pull` encounters more datoms than `config.zero_copy_threshold`, it 
 - **Deserialize**: Use `ets_index.deserialize_term(bin)` to recover `dynamic.Dynamic`.
 - **Benefit**: Eliminates GC pressure for large analytical payloads.
 
+#### Tuning Guidance
+The default `zero_copy_threshold` is 10,000 bytes. Configure `DbConfig` based on the workload:
+- `1,000 bytes`: Aggressive zero-copy. Best for analytical/batch workloads.
+- `10,000 bytes`: Default (balanced). Good for mixed workloads.
+- `100,000 bytes`: Conservative. Best for interactive apps expecting structured `PullResult` types over binary blobs.
+
 ### Graph Traversal Performance (Phase 60)
 The `gleamdb.traverse` API resolves multi-hop relationships using batched ETS lookups:
 

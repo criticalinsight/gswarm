@@ -29,6 +29,14 @@ pub type TraversalExpr = types.TraversalExpr
 pub fn out(attr: String) -> TraversalStep { types.Out(attr) }
 pub fn step_in(attr: String) -> TraversalStep { types.In(attr) }
 
+pub fn out_limit(attribute: String, limit: Int) -> types.TraversalStep {
+  types.OutLimit(attribute, limit)
+}
+
+pub fn in_limit(attribute: String, limit: Int) -> types.TraversalStep {
+  types.InLimit(attribute, limit)
+}
+
 pub fn new() -> Db {
   new_with_adapter(None)
 }

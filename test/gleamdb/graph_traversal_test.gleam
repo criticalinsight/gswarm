@@ -56,4 +56,16 @@ pub fn graph_traversal_test() {
   // 4. Max Depth Limit Rejection
   let res_err = gleamdb.traverse(db, fact.uid(1), [Out("a"), Out("b"), Out("c")], 2)
   res_err |> should.be_error()
+  
+  // 5. Per-Hop LIMIT parsing (Supernode protection)
+  let assert Ok(limited_friends) = gleamdb.traverse(db, fact.uid(1), [types.OutLimit("user/friends", 1)], 5)
+  list.length(limited_friends) |> should.equal(1) // Just 1 friend out of 2
+  
+  // 6. Limits apply cumulatively
+  let assert Ok(limited_posts) = gleamdb.traverse(db, fact.uid(1), [types.OutLimit("user/friends", 1), types.OutLimit("user/posts", 1)], 5)
+  list.length(limited_posts) |> should.equal(1) // 1 post from the 1 friend
+  
+  // 7. InLimit test
+  let assert Ok(limited_likers) = gleamdb.traverse(db, fact.uid(1), [Out("user/friends"), Out("user/posts"), types.InLimit("likes/post", 0)], 5)
+  list.length(limited_likers) |> should.equal(0) // We limited likers to 0, so Dave is pruned
 }

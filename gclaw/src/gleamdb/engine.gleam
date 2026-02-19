@@ -994,6 +994,22 @@ fn do_traverse(db_state: types.DbState, current_ids: List(Int), expr: types.Trav
               }
             })
           }
+          types.OutLimit(attr, limit) -> {
+            let datoms = case db_state.ets_name {
+              Some(name) -> ets_index.lookup_datoms(name <> "_eavt", fact.EntityId(id))
+                            |> list.filter(fn(d: fact.Datom) { d.attribute == attr })
+              None -> index.get_datoms_by_entity_attr(db_state.eavt, fact.EntityId(id), attr)
+            }
+            let active = filter_active(datoms)
+            let result_ids = list.filter_map(active, fn(d) {
+              case d.value {
+                fact.Ref(fact.EntityId(v_id)) -> Ok(v_id)
+                fact.Int(v_id) -> Ok(v_id)
+                _ -> Error(Nil)
+              }
+            })
+            list.take(result_ids, limit)
+          }
           types.In(attr) -> {
             let datoms = case db_state.ets_name {
               Some(name) -> ets_index.lookup_datoms(name <> "_aevt", attr)
@@ -1012,8 +1028,27 @@ fn do_traverse(db_state: types.DbState, current_ids: List(Int), expr: types.Trav
               e
             })
           }
+          types.InLimit(attr, limit) -> {
+            let datoms = case db_state.ets_name {
+              Some(name) -> ets_index.lookup_datoms(name <> "_aevt", attr)
+                           |> list.filter(fn(d: fact.Datom) { 
+                              case d.value {
+                                fact.Ref(fact.EntityId(v_id)) if v_id == id -> True
+                                fact.Int(v_id) if v_id == id -> True
+                                _ -> False
+                              }
+                           })
+              None -> index.get_datoms_by_val(db_state.aevt, attr, fact.Ref(fact.EntityId(id)))
+            }
+            let active = filter_active(datoms)
+            let result_ids = list.map(active, fn(d) { 
+              let fact.EntityId(e_id) = d.entity
+              e_id
+            })
+            list.take(result_ids, limit)
+          }
         }
-        list.append(step_results, acc)
+        list.append(acc, step_results)
       }) |> list.unique()
       
       do_traverse(db_state, next_ids, rest)

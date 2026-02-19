@@ -1,5 +1,15 @@
 # Release Notes
 
+## [2.5.0] - 2026-02-20
+### Added
+- **Graph Traversal Per-Hop Constraints**: New `OutLimit` and `InLimit` variants for `TraversalStep` alongside `out_limit` and `in_limit` API wrappers. Protects against supernode explosion by capping branching per hop.
+- **Zero-Copy Serialization Tuning**: Added guidance around adjusting `zero_copy_threshold` for interactive vs analytical workloads.
+
+### Child Project Synchronization
+- **gswarm**: Vendored v2.5.0.
+- **gclaw**: Vendored v2.5.0.
+- **gleamcms**: Vendored v2.5.0.
+
 ## [2.4.0] - 2026-02-20
 ### Added
 - **Predictive Prefetching**: Background heuristic analyzes query history to warm hot attributes. Enabled by default.

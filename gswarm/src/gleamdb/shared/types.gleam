@@ -33,6 +33,8 @@ pub type PullResult {
 pub type TraversalStep {
   Out(attribute: String)  // ->
   In(attribute: String)   // <-
+  OutLimit(attribute: String, limit: Int) // -> with max targets
+  InLimit(attribute: String, limit: Int)  // <- with max targets
 }
 
 pub type TraversalExpr = List(TraversalStep)
