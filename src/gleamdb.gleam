@@ -21,6 +21,13 @@ import gleamdb/raft
 pub type Db = transactor.Db
 pub type PullResult = types.PullResult
 pub type PullPattern = types.PullPattern
+pub type TraversalStep = types.TraversalStep
+pub type TraversalExpr = types.TraversalExpr
+
+// Phase 61: Re-export traversal constructors for ergonomic imports
+// Usage: `import gleamdb` then `gleamdb.out("attr")` / `gleamdb.step_in("attr")`
+pub fn out(attr: String) -> TraversalStep { types.Out(attr) }
+pub fn step_in(attr: String) -> TraversalStep { types.In(attr) }
 
 pub fn new() -> Db {
   new_with_adapter(None)
@@ -227,12 +234,9 @@ pub fn pull(
   engine.pull(state, fact.Uid(id), pattern)
 }
 
-pub fn traverse(
-  db: Db,
-  eid: fact.Eid,
-  expr: types.TraversalExpr,
-  max_depth: Int,
-) -> Result(List(fact.Value), String) {
+/// Phase 61: Resolve an Eid to a raw Int, handling both Uid and Lookup forms.
+/// Eliminates the repeated `let fact.EntityId(id_int) = ...` pattern in consumer code.
+pub fn resolve_eid(db: Db, eid: fact.Eid) -> Int {
   let state = transactor.get_state(db)
   let fact.EntityId(id_int) = case eid {
     fact.Uid(i) -> i
@@ -240,6 +244,17 @@ pub fn traverse(
        index.get_entity_by_av(state.avet, a, v) |> result.unwrap(fact.EntityId(0))
     }
   }
+  id_int
+}
+
+pub fn traverse(
+  db: Db,
+  eid: fact.Eid,
+  expr: types.TraversalExpr,
+  max_depth: Int,
+) -> Result(List(fact.Value), String) {
+  let state = transactor.get_state(db)
+  let id_int = resolve_eid(db, eid)
   engine.traverse(state, id_int, expr, max_depth)
 }
 

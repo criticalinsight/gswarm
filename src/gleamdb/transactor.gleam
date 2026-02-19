@@ -112,7 +112,7 @@ fn do_start_named(
       config: types.Config(
         parallel_threshold: 1000, 
         batch_size: 1000, 
-        prefetch_enabled: False, 
+        prefetch_enabled: True, 
         zero_copy_threshold: 10000
       ),
       query_history: [],
