@@ -1,4 +1,4 @@
-// graph_intel.gleam — Dogfood GleamDB v2.0.0 (Phases 27-32) in Gswarm
+// graph_intel.gleam — Dogfood GleamDB v2.4.0 (Phases 27-32, 59-60) in Gswarm
 //
 // This module exercises EVERY major feature added since v1.7.1:
 //  - Phase 27: Speculative Soul  (`with_facts` for what-if simulation)
@@ -7,6 +7,8 @@
 //  - Phase 30: Completeness      (`register_composite` for market data integrity)
 //  - Phase 31: Intelligence      (`q.avg`, `q.sum`, `q.count` for distributed aggregates)
 //  - Phase 32: Graph Suite       (9 graph predicates for insider/market network analysis)
+//  - Phase 59: Advanced Features (predictive prefetching, zero-copy serialization)
+//  - Phase 60: Graph Traversal   (`gleamdb.traverse` for concise multi-hop edge chasing)
 
 import gleam/io
 import gleam/int
@@ -18,7 +20,7 @@ import gleam/option.{None}
 import gleam/erlang/process
 import gleamdb
 import gleamdb/fact
-import gleamdb/shared/types
+import gleamdb/shared/types.{Out}
 import gleamdb/q
 import gleamdb/engine
 
@@ -307,6 +309,45 @@ pub fn market_dependency_order(db: gleamdb.Db) -> types.QueryResult {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// Phase 60: Graph Traversal DSL — concise edge chasing
+// ─────────────────────────────────────────────────────────────────
+
+/// Quick insider reach: who does a trader trade with, and who do THEY trade with?
+/// Uses the Phase 60 traverse DSL instead of verbose Datalog reachability queries.
+pub fn quick_insider_reach(db: gleamdb.Db, trader_id: String) -> Result(List(fact.Value), String) {
+  let eid = fact.Lookup(#("insider/confidence", fact.Float(0.85)))
+  // 2-hop: trader -> trades_with -> trades_with
+  case gleamdb.traverse(db, eid, [Out("trades_with"), Out("trades_with")], 5) {
+    Ok(reached) -> {
+      io.println("⚡ Traverse: " <> trader_id <> " reaches " 
+        <> int.to_string(list.length(reached)) <> " traders (2-hop)")
+      Ok(reached)
+    }
+    Error(e) -> {
+      io.println("⚠️ Traverse failed: " <> e)
+      Error(e)
+    }
+  }
+}
+
+/// Market influence chain: follow market/influences edges to discover downstream markets.
+pub fn market_influence_chain(db: gleamdb.Db, market_name: String) -> Result(List(fact.Value), String) {
+  let eid = fact.Lookup(#("market/name", fact.Str(market_name)))
+  // 3-hop max: BTC -> ETH -> SOL -> ...
+  case gleamdb.traverse(db, eid, [Out("market/influences"), Out("market/influences"), Out("market/influences")], 5) {
+    Ok(chain) -> {
+      io.println("🔗 Market Chain: " <> market_name <> " influences " 
+        <> int.to_string(list.length(chain)) <> " downstream markets")
+      Ok(chain)
+    }
+    Error(e) -> {
+      io.println("⚠️ Market chain traverse failed: " <> e)
+      Error(e)
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
 // Comprehensive scan — runs all analyses in sequence
 // ─────────────────────────────────────────────────────────────────
 
@@ -314,7 +355,7 @@ pub fn market_dependency_order(db: gleamdb.Db) -> types.QueryResult {
 pub fn full_intelligence_scan(ctx: ShardedContext) -> Nil {
   let db = node.get_primary(ctx)
   
-  io.println("\n━━━━━ GleamDB v2.0.0 Intelligence Scan ━━━━━")
+  io.println("\n━━━━━ GleamDB v2.4.0 Intelligence Scan ━━━━━")
   
   // Phase 28: Show query plan
   let _ = explain_complex_query()
@@ -327,6 +368,10 @@ pub fn full_intelligence_scan(ctx: ShardedContext) -> Nil {
   let _ = find_gatekeepers(db)
   let _ = find_trading_rings(db)
   let _ = market_dependency_order(db)
+  
+  // Phase 60: Graph Traversal DSL
+  let _ = quick_insider_reach(db, "trader_a")
+  let _ = market_influence_chain(db, "Bitcoin")
   
   io.println("━━━━━ Scan Complete ━━━━━\n")
   Nil

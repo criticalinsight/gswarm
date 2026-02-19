@@ -10,5 +10,7 @@ pub fn init_schema(db: gleamdb.Db) {
   let _ = gleamdb.set_schema(db, "cms.post/published_at", AttributeConfig(unique: False, component: False, retention: All, cardinality: One, check: None, composite_group: None, layout: fact.Row, tier: fact.Memory, eviction: fact.AlwaysInMemory))
   let _ = gleamdb.set_schema(db, "cms.post/tags", AttributeConfig(unique: False, component: False, retention: All, cardinality: Many, check: None, composite_group: None, layout: fact.Row, tier: fact.Memory, eviction: fact.AlwaysInMemory))
   let _ = gleamdb.set_schema(db, "cms.post/featured_image", AttributeConfig(unique: False, component: False, retention: All, cardinality: One, check: None, composite_group: None, layout: fact.Row, tier: fact.Memory, eviction: fact.AlwaysInMemory))
+  // Phase 60: Relationship attribute for Graph Traversal DSL
+  let _ = gleamdb.set_schema(db, "cms.post/related_posts", AttributeConfig(unique: False, component: False, retention: All, cardinality: Many, check: None, composite_group: None, layout: fact.Row, tier: fact.Memory, eviction: fact.AlwaysInMemory))
   Nil
 }
